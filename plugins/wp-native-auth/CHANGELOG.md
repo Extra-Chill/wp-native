@@ -2,6 +2,11 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.4.2] - 2026-10-13
+
+### Fixed
+- serve .well-known metadata even when a foreign rewrite rule matches
+
 ## [0.4.1] - 2026-09-18
 
 ### Fixed
