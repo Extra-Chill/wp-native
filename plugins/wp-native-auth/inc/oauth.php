@@ -185,26 +185,29 @@ function wp_native_auth_oauth_routes(): array {
 }
 
 /**
- * Answer OAuth endpoint requests when WordPress resolved nothing else.
+ * Answer OAuth endpoint requests.
  *
- * Hooked on template_redirect so requests that match real WordPress
- * content (a page at /register, for example) keep being served by
- * WordPress; hosts can move any path via wp_native_auth_oauth_routes().
+ * Hooked on template_redirect (priority 1, ahead of redirect_canonical at
+ * 10). The two RFC 8615 `.well-known` metadata documents are answered by
+ * path whatever the main query resolved to: those paths are reserved for
+ * this purpose, and a foreign rewrite rule left behind by another plugin
+ * would otherwise turn them into a front-page query that
+ * redirect_canonical sends to a trailing-slash HTML page (#99).
+ *
+ * Every other endpoint is answered only when WordPress resolved nothing
+ * else, so real content (a page at /register, for example) keeps being
+ * served by WordPress; hosts can move any path via
+ * wp_native_auth_oauth_routes().
  *
  * @return void
  */
 function wp_native_auth_oauth_maybe_handle_request(): void {
-	if ( ! is_404() ) {
-		return;
-	}
-
-	$path   = wp_native_auth_oauth_current_path();
-	$routes = wp_native_auth_oauth_routes();
-
+	$path = wp_native_auth_oauth_current_path();
 	if ( '' === $path ) {
 		return;
 	}
 
+	$routes = wp_native_auth_oauth_routes();
 	$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : 'GET';
 
 	if ( isset( $routes['protected_resource'] ) && wp_native_auth_oauth_path_matches( $path, (string) $routes['protected_resource'], true ) ) {
@@ -219,6 +222,10 @@ function wp_native_auth_oauth_maybe_handle_request(): void {
 			wp_native_auth_oauth_send_method_not_allowed( 'GET, HEAD' );
 		}
 		wp_native_auth_oauth_send_server_metadata();
+	}
+
+	if ( ! is_404() ) {
+		return;
 	}
 
 	if ( isset( $routes['authorize'] ) && wp_native_auth_oauth_path_matches( $path, (string) $routes['authorize'] ) ) {

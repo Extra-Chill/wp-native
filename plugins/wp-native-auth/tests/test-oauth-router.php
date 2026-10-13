@@ -200,6 +200,53 @@ class Test_WP_Native_Auth_OAuth_Router extends WP_UnitTestCase {
 		$this->assertSame( array( untrailingslashit( home_url() ) ), $response->payload['authorization_servers'] );
 	}
 
+	/**
+	 * A foreign rewrite rule (e.g. one left behind by another plugin) can
+	 * resolve a `.well-known` path to a non-404 query. The metadata must
+	 * still be served (#99).
+	 */
+	public function test_protected_resource_served_when_query_is_not_404(): void {
+		$this->route( 'GET', '/.well-known/oauth-protected-resource' );
+		$this->set_404( false );
+
+		$response = $this->run_router();
+
+		$this->assertSame( 200, $response->status );
+		$this->assertSame( untrailingslashit( home_url() ), $response->payload['resource'] );
+	}
+
+	public function test_server_metadata_served_when_query_is_not_404(): void {
+		$this->route( 'GET', '/.well-known/oauth-authorization-server' );
+		$this->set_404( false );
+
+		$response = $this->run_router();
+
+		$this->assertSame( 200, $response->status );
+		$this->assertSame( untrailingslashit( home_url() ), $response->payload['issuer'] );
+	}
+
+	public function test_trailing_slash_metadata_path_is_answered_directly(): void {
+		$this->route( 'GET', '/.well-known/oauth-protected-resource/' );
+		$this->set_404( false );
+
+		$response = $this->run_router();
+
+		$this->assertSame( 200, $response->status );
+	}
+
+	public function test_non_metadata_endpoint_still_defers_to_resolved_content(): void {
+		$this->route( 'POST', '/register' );
+		$this->set_404( false );
+
+		try {
+			wp_native_auth_oauth_maybe_handle_request();
+		} catch ( WP_Native_Auth_Router_Response $e ) {
+			$this->fail( '/register was claimed even though WordPress resolved real content.' );
+		}
+
+		$this->assertTrue( true );
+	}
+
 	// ------------------------------------------------------------------
 	// GET /authorize.
 	// ------------------------------------------------------------------
