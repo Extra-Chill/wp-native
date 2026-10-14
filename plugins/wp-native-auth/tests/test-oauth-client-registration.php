@@ -70,6 +70,53 @@ class Test_WP_Native_Auth_OAuth_Client_Registration extends WP_UnitTestCase {
 	}
 
 	/**
+	 * A device-only client has no redirect and may omit redirect_uris (RFC 7591 §2).
+	 */
+	public function test_device_only_client_may_omit_redirect_uris(): void {
+		$body = array(
+			'client_name'                => 'Device Only',
+			'token_endpoint_auth_method' => 'none',
+			'grant_types'                => array( WP_NATIVE_AUTH_OAUTH_DEVICE_GRANT_TYPE, 'refresh_token' ),
+		);
+
+		$client = wp_native_auth_oauth_register_client( $body, '198.51.100.250' );
+
+		$this->assertIsArray( $client, 'a device-only client must register without redirect_uris' );
+		$this->assertSame( array(), $client['redirect_uris'] );
+
+		$stored = wp_native_auth_oauth_find_registered_client( $client['client_id'] );
+		$this->assertIsArray( $stored );
+		$this->assertFalse( wp_native_auth_oauth_validate_redirect_uri( $stored['redirect_uris'], 'https://example.com/callback' ), 'a client without redirect URIs can never be redirected to' );
+	}
+
+	/**
+	 * A redirect-based client still needs at least one redirect URI.
+	 */
+	public function test_authorization_code_client_still_requires_redirect_uris(): void {
+		$body = array(
+			'client_name'                => 'Code Client',
+			'token_endpoint_auth_method' => 'none',
+			'grant_types'                => array( 'authorization_code', WP_NATIVE_AUTH_OAUTH_DEVICE_GRANT_TYPE ),
+		);
+		$this->assertWPError( wp_native_auth_oauth_register_client( $body, '198.51.100.251' ) );
+		$this->assertWPError( $this->register( array( 'redirect_uris' => array() ) ), 'default grants include authorization_code' );
+	}
+
+	/**
+	 * Supplied redirect URIs are still validated for a device-only client.
+	 */
+	public function test_device_only_client_redirect_uris_are_still_validated(): void {
+		$this->assertWPError(
+			$this->register(
+				array(
+					'grant_types'   => array( WP_NATIVE_AUTH_OAUTH_DEVICE_GRANT_TYPE ),
+					'redirect_uris' => array( 'http://evil.example.com/cb' ),
+				)
+			)
+		);
+	}
+
+	/**
 	 * RFC 7591 attaches no meaning to the order of grant_types.
 	 */
 	public function test_grant_type_order_is_not_significant(): void {
