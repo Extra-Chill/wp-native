@@ -2,6 +2,11 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.4.3] - 2026-10-14
+
+### Fixed
+- let device-only clients register without redirect_uris
+
 ## [0.4.2] - 2026-10-13
 
 ### Fixed
