@@ -253,28 +253,6 @@ function wp_native_auth_oauth_register_client( array $body, string $ip ): array|
 		);
 	}
 
-	$redirect_uris = $body['redirect_uris'] ?? null;
-	if ( ! is_array( $redirect_uris ) || count( $redirect_uris ) < 1 || count( $redirect_uris ) > 10 ) {
-		return new WP_Error(
-			'invalid_client_metadata',
-			__( 'redirect_uris must be an array of 1 to 10 HTTPS (or loopback) URIs.', 'wp-native-auth' ),
-			array( 'status' => 400 )
-		);
-	}
-
-	$validated_uris = array();
-	foreach ( $redirect_uris as $uri ) {
-		if ( ! is_string( $uri ) || ! wp_native_auth_oauth_is_valid_redirect_uri( $uri ) ) {
-			return new WP_Error(
-				'invalid_redirect_uri',
-				__( 'One or more redirect_uris are not acceptable redirect URIs.', 'wp-native-auth' ),
-				array( 'status' => 400 )
-			);
-		}
-		$validated_uris[] = $uri;
-	}
-
-	$validated_uris = array_values( array_unique( $validated_uris ) );
 
 	$auth_method = $body['token_endpoint_auth_method'] ?? 'none';
 	if ( 'none' !== $auth_method ) {
@@ -321,6 +299,36 @@ function wp_native_auth_oauth_register_client( array $body, string $ip ): array|
 			array( 'status' => 400 )
 		);
 	}
+
+	/*
+	 * RFC 7591 §2: redirect_uris is required for redirect-based flows. A
+	 * client registering only grants without a redirect (the RFC 8628 device
+	 * grant, optionally with refresh) may omit it. Such a client registers no
+	 * redirect URIs, so /authorize can never redirect for it.
+	 */
+	$needs_redirect = in_array( 'authorization_code', array_map( 'strval', $grant_types ), true );
+	$redirect_uris  = $body['redirect_uris'] ?? ( $needs_redirect ? null : array() );
+	if ( ! is_array( $redirect_uris ) || ( $needs_redirect && count( $redirect_uris ) < 1 ) || count( $redirect_uris ) > 10 ) {
+		return new WP_Error(
+			'invalid_client_metadata',
+			__( 'redirect_uris must be an array of 1 to 10 HTTPS (or loopback) URIs.', 'wp-native-auth' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$validated_uris = array();
+	foreach ( $redirect_uris as $uri ) {
+		if ( ! is_string( $uri ) || ! wp_native_auth_oauth_is_valid_redirect_uri( $uri ) ) {
+			return new WP_Error(
+				'invalid_redirect_uri',
+				__( 'One or more redirect_uris are not acceptable redirect URIs.', 'wp-native-auth' ),
+				array( 'status' => 400 )
+			);
+		}
+		$validated_uris[] = $uri;
+	}
+
+	$validated_uris = array_values( array_unique( $validated_uris ) );
 
 	/*
 	 * A device-only client has no authorization response, so RFC 7591 lets
