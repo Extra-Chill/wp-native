@@ -78,6 +78,7 @@ class Test_WP_Native_Auth_OAuth_Client_Registration extends WP_UnitTestCase {
 			'token_endpoint_auth_method' => 'none',
 			'grant_types'                => array( WP_NATIVE_AUTH_OAUTH_DEVICE_GRANT_TYPE, 'refresh_token' ),
 		);
+
 		$client = wp_native_auth_oauth_register_client( $body, '198.51.100.250' );
 
 		$this->assertIsArray( $client, 'a device-only client must register without redirect_uris' );

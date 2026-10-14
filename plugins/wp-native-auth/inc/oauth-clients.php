@@ -253,7 +253,6 @@ function wp_native_auth_oauth_register_client( array $body, string $ip ): array|
 		);
 	}
 
-
 	$auth_method = $body['token_endpoint_auth_method'] ?? 'none';
 	if ( 'none' !== $auth_method ) {
 		return new WP_Error(
