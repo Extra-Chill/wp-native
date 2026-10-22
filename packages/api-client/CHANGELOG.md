@@ -2,6 +2,11 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.1.1] - 2026-10-22
+
+### Fixed
+- send empty object input when an object-schema ability is executed without input
+
 ## [0.1.0] - 2026-08-15
 
 ### Added
