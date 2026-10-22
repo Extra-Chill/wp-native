@@ -194,13 +194,24 @@ export class WPNativeClient {
         ? 'DELETE'
         : 'POST';
     let path = `${RUN_PATH_PREFIX}/${encodeAbilityName(descriptor.name)}/run`;
-    const body: { input: TInput | null } = {
-      input: input === undefined ? null : input,
+    // Omitted input for an object-typed schema is sent as an empty object.
+    // Core only substitutes the schema `default` for null input, so abilities
+    // whose object schema lacks a default would otherwise reject the call
+    // with "input is not of type object". Explicit null is preserved.
+    const sendEmptyObject = input === undefined && acceptsObjectInput(descriptor.input_schema);
+    const body: { input: TInput | Record<string, never> | null } = {
+      input: sendEmptyObject ? {} : input === undefined ? null : input,
     };
 
     if (method !== 'POST') {
       const query = new URLSearchParams();
-      appendQueryValue(query, 'input', body.input);
+      if (sendEmptyObject) {
+        // `?input=` is the only query encoding core accepts as an empty
+        // object: rest_is_object('') is true and it sanitizes to array().
+        query.append('input', '');
+      } else {
+        appendQueryValue(query, 'input', body.input);
+      }
       const queryString = query.toString();
       if (queryString) {
         path += `?${queryString}`;
@@ -225,6 +236,14 @@ export class WPNativeClient {
 
 function isDerivableTransport(transport: Transport): transport is DerivableTransport {
   return 'derive' in transport && typeof transport.derive === 'function';
+}
+
+function acceptsObjectInput(schema: unknown): boolean {
+  if (!schema || typeof schema !== 'object') {
+    return false;
+  }
+  const type = (schema as { type?: unknown }).type;
+  return type === 'object' || (Array.isArray(type) && type.includes('object'));
 }
 
 function appendQueryValue(
