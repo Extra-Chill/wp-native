@@ -8,14 +8,14 @@
     "README.md",
     "LICENSE"
   ],
-  "license": "GPL-2.0-or-later",
+  "license": "MIT",
   "author": "Chris Huber <chubes@extrachill.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chubes4/wp-native.git"
+    "url": "git+https://github.com/Extra-Chill/wp-native.git"
   },
-  "homepage": "https://github.com/chubes4/wp-native",
-  "bugs": "https://github.com/chubes4/wp-native/issues",
+  "homepage": "https://github.com/Extra-Chill/wp-native",
+  "bugs": "https://github.com/Extra-Chill/wp-native/issues",
   "keywords": [
     "wordpress",
     "react-native",

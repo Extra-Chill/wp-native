@@ -109,8 +109,8 @@ const posts = await client.execute('wp/post.list', { per_page: 10 });
 
 ## Broader project
 
-wp-native-client is the abilities client layer of [wp-native](https://github.com/chubes4/wp-native) — an open-source framework for turning WordPress sites into real native apps. See the [main repo](https://github.com/chubes4/wp-native) for the shell, the auth plugin, and the full documentation.
+wp-native-client is the abilities client layer of [wp-native](https://github.com/Extra-Chill/wp-native) — an open-source framework for turning WordPress sites into real native apps. See the [main repo](https://github.com/Extra-Chill/wp-native) for the shell, the auth plugin, and the full documentation.
 
 ## License
 
-GPL-2.0-or-later — [github.com/chubes4/wp-native](https://github.com/chubes4/wp-native)
+MIT — [github.com/Extra-Chill/wp-native](https://github.com/Extra-Chill/wp-native)

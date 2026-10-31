@@ -1,5 +1,5 @@
 # Copyright (C) 2026 wp-native contributors
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: MIT
 
 require 'json'
 
@@ -14,7 +14,7 @@ Pod::Spec.new do |s|
   s.author           = package['author']
   s.homepage         = package['homepage']
   s.platforms        = { :ios => '17.0' }
-  s.source           = { :git => 'https://github.com/chubes4/wp-native.git' }
+  s.source           = { :git => 'https://github.com/Extra-Chill/wp-native.git' }
   s.static_framework = true
   s.swift_version    = '6.0'
   s.source_files     = '**/*.swift'
