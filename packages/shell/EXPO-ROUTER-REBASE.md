@@ -2,7 +2,7 @@
 
 > **Completed architecture decision.** This document preserves the migration plan from the original drawer-owned shell to the current consumer-owned expo-router model. `wp-native-shell@0.1.0` implements the resulting provider and slot architecture; checklist and version references below are historical execution notes.
 
-This document was the authoritative implementation plan for migrating `wp-native-shell` from a self-mounted `@react-navigation/drawer` root to a guest of `expo-router`. The current public contract lives in [SHELL.md](SHELL.md); the rationale and slices below remain as architecture history for [chubes4/wp-native#29](https://github.com/chubes4/wp-native/issues/29).
+This document was the authoritative implementation plan for migrating `wp-native-shell` from a self-mounted `@react-navigation/drawer` root to a guest of `expo-router`. The current public contract lives in [SHELL.md](SHELL.md); the rationale and slices below remain as architecture history for [Extra-Chill/wp-native#29](https://github.com/Extra-Chill/wp-native/issues/29).
 
 ## Why
 
@@ -362,7 +362,7 @@ After all three slices merge:
 - [ ] All three slices merged in order
 - [ ] `wp-native-shell@0.0.2` published to npm with new peer deps
 - [ ] SHELL.md updated to reflect the new mount pattern (separate PR or part of slice C)
-- [ ] [chubes4/wp-native#29](https://github.com/chubes4/wp-native/issues/29) closed
+- [ ] [Extra-Chill/wp-native#29](https://github.com/Extra-Chill/wp-native/issues/29) closed
 - [ ] [extrachill-app#33](https://github.com/Extra-Chill/extrachill-app/issues/33) (M7.2.5) unblocked
 
 ## Historical implementation rules

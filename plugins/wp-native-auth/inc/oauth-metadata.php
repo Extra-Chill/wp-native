@@ -105,7 +105,7 @@ function wp_native_auth_oauth_protected_resource_metadata(): array {
 		'authorization_servers'    => array( wp_native_auth_oauth_issuer() ),
 		'scopes_supported'         => array( WP_NATIVE_AUTH_OAUTH_SCOPE ),
 		'bearer_methods_supported' => array( 'header' ),
-		'resource_documentation'   => 'https://github.com/chubes4/wp-native/tree/main/plugins/wp-native-auth',
+		'resource_documentation'   => 'https://github.com/Extra-Chill/wp-native/tree/main/plugins/wp-native-auth',
 	);
 
 	/**

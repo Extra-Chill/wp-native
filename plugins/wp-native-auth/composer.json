@@ -1,6 +1,6 @@
 {
   "name": "wp-native/wp-native-auth",
   "type": "wordpress-plugin",
-  "license": "GPL-2.0-or-later",
+  "license": "MIT",
   "require": { "php": ">=8.1" }
 }

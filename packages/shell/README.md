@@ -1,6 +1,6 @@
 # wp-native-shell
 
-React Native app shell for [wp-native](https://github.com/chubes4/wp-native). Providers, auth gate, drawer content slot, and ability-driven screens — built for expo-router.
+React Native app shell for [wp-native](https://github.com/Extra-Chill/wp-native). Providers, auth gate, drawer content slot, and ability-driven screens — built for expo-router.
 
 ## Install
 
@@ -16,7 +16,7 @@ npm install wp-native-shell wp-native-client
 - `react-native-gesture-handler` >= 2
 - `wp-native-client` (any version)
 
-Your WordPress site needs the [wp-native-auth](https://github.com/chubes4/wp-native/tree/main/plugins/wp-native-auth) plugin installed.
+Your WordPress site needs the [wp-native-auth](https://github.com/Extra-Chill/wp-native/tree/main/plugins/wp-native-auth) plugin installed.
 
 ## Quick start
 
@@ -76,11 +76,11 @@ export default function RootLayout() {
 
 ## Full contract
 
-The authoritative API surface, types, and behavior spec lives in [SHELL.md](https://github.com/chubes4/wp-native/blob/main/packages/shell/SHELL.md). See also:
+The authoritative API surface, types, and behavior spec lives in [SHELL.md](https://github.com/Extra-Chill/wp-native/blob/main/packages/shell/SHELL.md). See also:
 
-- [SCREENS.md](https://github.com/chubes4/wp-native/blob/main/packages/shell/SCREENS.md) — ability-driven screen adapters
-- [EXPO-ROUTER-REBASE.md](https://github.com/chubes4/wp-native/blob/main/packages/shell/EXPO-ROUTER-REBASE.md) — architecture decision record
+- [SCREENS.md](https://github.com/Extra-Chill/wp-native/blob/main/packages/shell/SCREENS.md) — ability-driven screen adapters
+- [EXPO-ROUTER-REBASE.md](https://github.com/Extra-Chill/wp-native/blob/main/packages/shell/EXPO-ROUTER-REBASE.md) — architecture decision record
 
 ## License
 
-GPL-2.0-or-later — [github.com/chubes4/wp-native](https://github.com/chubes4/wp-native)
+MIT — [github.com/Extra-Chill/wp-native](https://github.com/Extra-Chill/wp-native)

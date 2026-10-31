@@ -19,10 +19,10 @@
  *   For React Native apps (also pulls in the client):
  *     npm install wp-native-shell wp-native-client
  *
- * See https://github.com/chubes4/wp-native for the full framework.
+ * See https://github.com/Extra-Chill/wp-native for the full framework.
  */
 
 throw new Error(
 	'wp-native is a meta package — install wp-native-client and/or ' +
-		'wp-native-shell instead. See https://github.com/chubes4/wp-native'
+		'wp-native-shell instead. See https://github.com/Extra-Chill/wp-native'
 );

@@ -19,8 +19,8 @@ npm install wp-native-shell wp-native-client
 npm install wp-native-client
 ```
 
-See the [main repo](https://github.com/chubes4/wp-native) for documentation, contract files, and the roadmap.
+See the [main repo](https://github.com/Extra-Chill/wp-native) for documentation, contract files, and the roadmap.
 
 ## License
 
-GPL-2.0-or-later
+MIT

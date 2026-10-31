@@ -2,11 +2,11 @@
   "name": "wp-native",
   "private": true,
   "description": "Turn any WordPress site into a real native app. Open source. Token auth. No WebViews.",
-  "license": "GPL-2.0-or-later",
+  "license": "MIT",
   "author": "Chris Huber <chubes@extrachill.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chubes4/wp-native.git"
+    "url": "git+https://github.com/Extra-Chill/wp-native.git"
   },
   "workspaces": [
     "packages/*",

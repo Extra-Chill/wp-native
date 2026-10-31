@@ -69,7 +69,7 @@ export default function RootLayout() {
 
 `<WPNativeApp>` composes (outer to inner): `ThemeProvider` > `AuthProvider` > `NavigationConfigProvider` > `BrowserHandoffProvider` > `AuthGate` > `{children}`. The auth gate renders your `loginScreen` when logged out, a loading fallback during token initialization, and `children` (your expo-router `<Slot/>`) when authenticated.
 
-The consumer mounts the drawer and section screens via expo-router's filesystem — see the [shell contract](https://github.com/chubes4/wp-native/blob/main/packages/shell/SHELL.md) for the full pattern.
+The consumer mounts the drawer and section screens via expo-router's filesystem — see the [shell contract](https://github.com/Extra-Chill/wp-native/blob/main/packages/shell/SHELL.md) for the full pattern.
 
 ## Architecture
 
@@ -137,12 +137,12 @@ The in-repo contract files are the deep-dive material for each topic:
 
 | Document | What it covers |
 |---|---|
-| [SHELL.md](https://github.com/chubes4/wp-native/blob/main/packages/shell/SHELL.md) | Full shell surface — auth, theme, navigation, app composition, browser handoff |
-| [SCREENS.md](https://github.com/chubes4/wp-native/blob/main/packages/shell/SCREENS.md) | Generic ability-driven screens — `AbilityList`, `AbilityDetail`, adapters |
-| [EXPO-ROUTER-REBASE.md](https://github.com/chubes4/wp-native/blob/main/packages/shell/EXPO-ROUTER-REBASE.md) | Architecture decision record for the expo-router migration |
-| [SCHEMAS.md](https://github.com/chubes4/wp-native/blob/main/plugins/wp-native-auth/SCHEMAS.md) | All 9 auth abilities — input/output schemas, error codes, extension hooks |
-| [ROADMAP.md](https://github.com/chubes4/wp-native/blob/main/docs/ROADMAP.md) | Current state, architectural principles, and next milestones |
-| [EC-ABILITIES-AUDIT.md](https://github.com/chubes4/wp-native/blob/main/docs/EC-ABILITIES-AUDIT.md) | Historical Extra Chill ability inventory that informed the initial migration |
+| [SHELL.md](https://github.com/Extra-Chill/wp-native/blob/main/packages/shell/SHELL.md) | Full shell surface — auth, theme, navigation, app composition, browser handoff |
+| [SCREENS.md](https://github.com/Extra-Chill/wp-native/blob/main/packages/shell/SCREENS.md) | Generic ability-driven screens — `AbilityList`, `AbilityDetail`, adapters |
+| [EXPO-ROUTER-REBASE.md](https://github.com/Extra-Chill/wp-native/blob/main/packages/shell/EXPO-ROUTER-REBASE.md) | Architecture decision record for the expo-router migration |
+| [SCHEMAS.md](https://github.com/Extra-Chill/wp-native/blob/main/plugins/wp-native-auth/SCHEMAS.md) | All 9 auth abilities — input/output schemas, error codes, extension hooks |
+| [ROADMAP.md](https://github.com/Extra-Chill/wp-native/blob/main/docs/ROADMAP.md) | Current state, architectural principles, and next milestones |
+| [EC-ABILITIES-AUDIT.md](https://github.com/Extra-Chill/wp-native/blob/main/docs/EC-ABILITIES-AUDIT.md) | Historical Extra Chill ability inventory that informed the initial migration |
 
 ## Compatibility
 
@@ -156,4 +156,4 @@ The in-repo contract files are the deep-dive material for each topic:
 
 ## License
 
-GPL-2.0-or-later
+MIT

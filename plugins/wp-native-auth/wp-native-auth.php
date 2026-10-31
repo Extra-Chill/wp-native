@@ -1,13 +1,13 @@
 <?php
 /**
  * Plugin Name:       wp-native Auth
- * Plugin URI:        https://github.com/chubes4/wp-native
+ * Plugin URI:        https://github.com/Extra-Chill/wp-native
  * Description:       Token-based authentication for WordPress, built for native app and third-party OAuth 2.1 clients. Provides login, refresh, logout, and session abilities via the WP 6.9+ Abilities API, plus a generic OAuth 2.1 authorization server (PKCE S256, DCR/CIMD, discovery, revocation).
  * Version:           0.4.3
  * Author:            Chris Huber
  * Author URI:        https://chubes.net
- * License:           GPL-2.0-or-later
- * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * License:           MIT
+ * License URI:       https://opensource.org/licenses/MIT
  * Requires at least: 6.9
  * Requires PHP:      8.1
  * Text Domain:       wp-native-auth

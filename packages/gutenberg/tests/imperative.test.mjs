@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2026 Chris Huber
- * SPDX-License-Identifier: GPL-2.0-or-later
+ * SPDX-License-Identifier: MIT
  */
 
 import assert from 'node:assert/strict';
