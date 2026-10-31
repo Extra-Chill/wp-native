@@ -62,6 +62,50 @@ Alternate roots are denied unless listed exactly in `allowedBaseUrls`. URL
 normalization permits equivalent trailing slashes but not credentials, query
 strings, fragments, relative URLs, non-HTTP protocols, or redirects.
 
+### Plain REST routes
+
+Some routes are intentionally not abilities (editor wrappers, multipart
+uploads). `client.request()` calls them through the client's own transport, so
+bearer auth, token refresh, redirect protection, `derive()`d roots and
+`ApiError` mapping all apply:
+
+```ts
+const editor = await client.request<{ content: string }>({
+  path: 'extrachill/v1/community/topics/42/editor',
+  query: { context: 'edit' },
+});
+
+await client.request({
+  path: 'extrachill/v1/community/topics/42/editor',
+  method: 'POST',
+  body: { content: '<p>Updated</p>' },
+});
+```
+
+Pass a `FormData` body for multipart uploads. It is sent untouched, and no JSON
+`Content-Type` is set, so the runtime adds the multipart boundary:
+
+```ts
+const form = new FormData();
+// React Native: form.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+form.append('file', fileBlob, 'photo.jpg');
+form.append('context', 'post');
+
+const media = await client.request<{ id: number; url: string }>({
+  path: 'extrachill/v1/media',
+  method: 'POST',
+  body: form,
+});
+```
+
+`path` is relative to the client's REST root (a leading `/` is tolerated).
+Absolute URLs, protocol-relative URLs, backslashes, fragments and `.`/`..`
+segments (including percent-encoded ones) are rejected before any request is
+sent, so credentials never leave the root. `method` defaults to `GET`. `query`
+uses the same bracket encoding as ability input (`{ ids: [1, 2] }` →
+`ids[0]=1&ids[1]=2`). Non-2xx responses throw `ApiError` with the WP_Error
+`code`, `message` and HTTP `status`.
+
 ### Three transports
 
 | Transport | Use when | Import |
@@ -85,8 +129,9 @@ const posts = await client.execute('wp/post.list', { per_page: 10 });
 
 ### Client
 
-- **`WPNativeClient`** — the universal client. Wraps a transport, exposes `discover()`, `execute()`, `executeUnchecked()`, `derive()`, `describe()`, `catalog`.
+- **`WPNativeClient`** — the universal client. Wraps a transport, exposes `discover()`, `execute()`, `executeUnchecked()`, `request()`, `derive()`, `describe()`, `catalog`.
 - **`WPNativeClientConfig`** — optional config (`validateAbilityNames`).
+- **`WPNativeRequest`** — `{ path, method?, query?, body?, headers? }` argument for `request()`.
 
 ### Transports
 

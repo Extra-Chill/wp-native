@@ -6,7 +6,7 @@
 
 // Client
 export { WPNativeClient } from './client';
-export type { WPNativeClientConfig } from './client';
+export type { WPNativeClientConfig, WPNativeRequest } from './client';
 
 // Abilities subsystem
 export { AbilityCatalog } from './abilities/catalog';
