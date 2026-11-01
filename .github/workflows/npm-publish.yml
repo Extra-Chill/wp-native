@@ -1,7 +1,9 @@
-name: Publish npm package
+name: Publish package
 
-# Publishes a workspace package when its release tag is pushed, using npm
-# Trusted Publishing (GitHub OIDC). No npm token is stored anywhere.
+# On a release tag: builds the package, attaches the tarball to a GitHub release
+# (consumers install from that URL; no npm account or human step needed), and
+# also publishes to npm when the repo variable NPM_TRUSTED_PUBLISHING is 'true'
+# (npm Trusted Publishing via GitHub OIDC; no token stored anywhere).
 # Tag format: <package-name>-v<version>, e.g. wp-native-client-v0.2.0
 on:
   push:
@@ -16,7 +18,7 @@ on:
         required: true
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -57,6 +59,25 @@ jobs:
 
       - run: npm ci --no-audit --no-fund
 
-      - name: Publish
+      - name: Clean build
+        run: npx tsc -b --clean && npx tsc -b
+
+      - name: Pack
+        id: pack
         working-directory: ${{ steps.pkg.outputs.dir }}
-        run: npm publish --access public --provenance
+        run: |
+          file=$(npm pack --ignore-scripts --silent | tail -1)
+          echo "file=${{ steps.pkg.outputs.dir }}/$file" >> "$GITHUB_OUTPUT"
+
+      - name: Attach tarball to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.pkg.outputs.tag }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "$TAG" --notes "Install: \`npm install https://github.com/${{ github.repository }}/releases/download/$TAG/$(basename ${{ steps.pack.outputs.file }})\`"
+          gh release upload "$TAG" "${{ steps.pack.outputs.file }}" --clobber
+
+      - name: Publish to npm
+        if: vars.NPM_TRUSTED_PUBLISHING == 'true'
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm publish --access public --provenance --ignore-scripts
