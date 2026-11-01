@@ -42,7 +42,7 @@
   "scripts": {
     "typecheck": "tsc -b",
     "test": "tsc -b && tsx --test --test-reporter=tap tests/*.test.mjs",
-    "prepublishOnly": "tsc -b"
+    "prepublishOnly": "tsc -b --clean && tsc -b"
   },
   "devDependencies": {
     "tsx": "^4.23.12",
