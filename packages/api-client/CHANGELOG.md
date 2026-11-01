@@ -2,6 +2,14 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.2.0] - 2026-11-01
+
+### Added
+- public authenticated request() for plain REST routes, including multipart FormData bodies
+
+### Changed
+- relicensed under MIT and moved to the Extra-Chill org
+
 ## [0.1.1] - 2026-10-22
 
 ### Fixed
