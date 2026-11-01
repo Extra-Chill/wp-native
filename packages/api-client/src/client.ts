@@ -28,7 +28,7 @@
  *   const me    = await client.execute<User>('wp-native/user.me');
  */
 
-import type { DerivableTransport, Transport } from './transports/types';
+import type { DerivableTransport, Transport, TransportRequest } from './transports/types';
 import { AbilityCatalog } from './abilities/catalog';
 import { discoverAbilities, encodeAbilityName, fetchAbility } from './abilities/discovery';
 import type {
@@ -50,6 +50,23 @@ export interface WPNativeClientConfig {
    * for that case so the intent is explicit.
    */
   validateAbilityNames?: boolean;
+}
+
+/**
+ * A request to a plain REST route on the client's REST root.
+ *
+ * `path` is relative to the root (e.g. `extrachill/v1/media`). Absolute URLs,
+ * protocol-relative URLs and `..` traversal are rejected so the transport's
+ * credentials can never be sent off-root.
+ */
+export interface WPNativeRequest {
+  path: string;
+  method?: TransportRequest['method'];
+  /** Encoded with the same bracket notation used for ability input. */
+  query?: Record<string, unknown>;
+  /** JSON object, or FormData for multipart uploads (sent untouched). */
+  body?: Record<string, unknown> | FormData;
+  headers?: Record<string, string>;
 }
 
 export class WPNativeClient {
@@ -226,6 +243,50 @@ export class WPNativeClient {
   }
 
   /**
+   * Make an authenticated request to a plain REST route on this client's
+   * REST root (including derive()d roots).
+   *
+   * Goes through the client's own transport, so auth headers, token refresh,
+   * redirect protection and ApiError mapping apply exactly as they do for
+   * ability execution. FormData bodies are passed through untouched so the
+   * runtime sets the multipart boundary; any caller-supplied Content-Type is
+   * dropped for FormData bodies.
+   *
+   * Throws:
+   *   - Error    if `path` is absolute, protocol-relative, or traverses with `..`
+   *   - ApiError if the server returns a non-2xx response
+   */
+  async request<T = unknown>(req: WPNativeRequest): Promise<T> {
+    let path = normalizeRequestPath(req.path);
+
+    if (req.query) {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(req.query)) {
+        appendQueryValue(query, key, value);
+      }
+      const queryString = query.toString();
+      if (queryString) {
+        path += `${path.includes('?') ? '&' : '?'}${queryString}`;
+      }
+    }
+
+    const isFormData = typeof FormData !== 'undefined' && req.body instanceof FormData;
+    let headers = req.headers;
+    if (headers && isFormData) {
+      headers = Object.fromEntries(
+        Object.entries(headers).filter(([name]) => name.toLowerCase() !== 'content-type'),
+      );
+    }
+
+    return this.transport.request<T>({
+      path,
+      method: req.method ?? 'GET',
+      ...(req.body !== undefined ? { body: req.body } : {}),
+      ...(headers ? { headers } : {}),
+    });
+  }
+
+  /**
    * Get a single ability descriptor from the catalog.
    * Returns undefined if not registered or catalog not loaded.
    */
@@ -236,6 +297,47 @@ export class WPNativeClient {
 
 function isDerivableTransport(transport: Transport): transport is DerivableTransport {
   return 'derive' in transport && typeof transport.derive === 'function';
+}
+
+/**
+ * Validate a caller-supplied REST path and return it relative to the root.
+ *
+ * A single leading slash is tolerated (`/wp/v2/posts`), but anything that
+ * could resolve outside the REST root is rejected.
+ */
+function normalizeRequestPath(rawPath: string): string {
+  if (typeof rawPath !== 'string' || rawPath.trim() === '') {
+    throw new Error('WPNativeClient.request: path must be a non-empty string.');
+  }
+  const path = rawPath.trim();
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+    throw new Error(`WPNativeClient.request: absolute URLs are not allowed: ${path}`);
+  }
+  if (path.startsWith('//')) {
+    throw new Error(`WPNativeClient.request: protocol-relative URLs are not allowed: ${path}`);
+  }
+  // Backslashes are normalized to slashes by URL parsers (`\\evil.test`).
+  if (path.includes('\\') || path.includes('#') || /[\u0000-\u001f\u007f]/.test(path)) {
+    throw new Error(`WPNativeClient.request: invalid path: ${path}`);
+  }
+
+  const relative = path.replace(/^\//, '');
+  const pathname = relative.split('?')[0] ?? '';
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    throw new Error(`WPNativeClient.request: invalid path encoding: ${path}`);
+  }
+  if (decoded.split('/').some((segment) => segment === '..' || segment === '.')) {
+    throw new Error(`WPNativeClient.request: path traversal is not allowed: ${path}`);
+  }
+  if (relative === '' || pathname === '') {
+    throw new Error('WPNativeClient.request: path must not be empty.');
+  }
+
+  return relative;
 }
 
 function acceptsObjectInput(schema: unknown): boolean {
