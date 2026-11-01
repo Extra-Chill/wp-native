@@ -32,7 +32,7 @@
   "scripts": {
     "typecheck": "tsc -b",
     "test": "node --test --test-reporter=tap tests/*.test.mjs",
-    "prepublishOnly": "tsc -b"
+    "prepublishOnly": "tsc -b --clean && tsc -b"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

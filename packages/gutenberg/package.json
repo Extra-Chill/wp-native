@@ -46,7 +46,7 @@
     "gate:fixture": "node scripts/verify-consumer.cjs",
     "typecheck": "tsc -b",
     "test": "tsc -b && node --test tests/*.test.*",
-    "prepublishOnly": "tsc -b"
+    "prepublishOnly": "tsc -b --clean && tsc -b"
   },
   "dependencies": {
     "expo-build-properties": "~1.0.10"
