@@ -37,14 +37,14 @@ WpApiFetchTransport      AuthFetchTransport / FetchTransport
 
 | Surface | Version | State |
 |---|---:|---|
-| `wp-native-client` | `0.0.2` | Discovery, execution, catalog validation, and fetch/auth/Gutenberg transports implemented |
-| `wp-native-shell` | `0.1.0` | Expo-router provider stack, auth gate, navigation slots, browser handoff, theming, and generic list/detail screens implemented |
+| `wp-native-client` | `0.2.0` | Discovery, execution, catalog validation, site-scoped `derive()` clients, plain REST `request()`, and fetch/auth/Gutenberg transports implemented |
+| `wp-native-shell` | `0.2.0` | Expo-router provider stack, auth gate, navigation slots, browser handoff, theming, and generic list/detail screens implemented |
 | `wp-native-auth` | `0.2.0` | Nine auth abilities, bearer resolution, device sessions, atomic refresh rotation, replay detection, browser handoff, registration, and policy continuations implemented |
 
 Known consumers:
 
-- [`Extra-Chill/extrachill-community`](https://github.com/Extra-Chill/extrachill-community) uses `wp-native-client` and `WpApiFetchTransport` in Gutenberg block frontends.
-- [`Extra-Chill/extrachill-app`](https://github.com/Extra-Chill/extrachill-app) declares `wp-native-client` and `wp-native-shell`; production mounting and real-device verification remain incomplete.
+- [Extra Chill community](https://github.com/Extra-Chill/extrachill/tree/main/plugins/extrachill-community) uses `wp-native-client` and `WpApiFetchTransport` in Gutenberg block frontends.
+- [`Extra-Chill/extrachill-app`](https://github.com/Extra-Chill/extrachill-app) mounts `wp-native-shell` across its production routes and uses `wp-native-client` for every screen. App Store submission and real-device verification are still pending.
 
 The project remains pre-1.0. Package surfaces may change as the mobile integration is completed and additional consumers exercise the generic boundary.
 
@@ -52,14 +52,13 @@ The project remains pre-1.0. Package surfaces may change as the mobile integrati
 
 ### 1. Complete Mobile Dogfooding
 
-- Mount the shell in `extrachill-app` production routes rather than limiting integration to dependency and import verification.
 - Verify login, refresh, logout, browser handoff, navigation, and ability-driven screens on real iOS and Android devices.
 - Record end-to-end evidence for token persistence, expiry, replay handling, and app restart behavior.
 
 ### 2. Expand Shared Client Adoption
 
 - Migrate suitable Extra Chill web consumers from endpoint-specific clients to `wp-native-client` as their server operations become abilities.
-- Keep multipart uploads and other unsupported wire formats on explicit REST routes until the Abilities API supports their requirements.
+- Keep multipart uploads and other unsupported wire formats on explicit REST routes, called through `client.request()`, until the Abilities API supports them.
 - Retire `@extrachill/api-client` only after its remaining consumers and contracts have been migrated and verified.
 
 ### 3. Improve Schema Tooling

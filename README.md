@@ -6,7 +6,12 @@ WordPress owns the behavior, schemas, data, and permissions. Each consumer owns 
 
 ## Status
 
-**Pre-1.0.** The current packages are `wp-native-client@0.0.2`, `wp-native-shell@0.1.0`, `wp-native-gutenberg@0.1.0`, and `wp-native-auth@0.2.0`. The client is used by multiple [Extra Chill community Gutenberg block frontends](https://github.com/Extra-Chill/extrachill-community). APIs may still change before 1.0.
+**Pre-1.0.** APIs may still change before 1.0. Current versions are on npm: [`wp-native-client`](https://www.npmjs.com/package/wp-native-client), [`wp-native-shell`](https://www.npmjs.com/package/wp-native-shell). `wp-native-gutenberg` is unpublished until GutenbergKit's license is clarified (see its [README](packages/gutenberg/README.md#license)). `wp-native-auth` ships as a WordPress plugin from [`plugins/wp-native-auth`](plugins/wp-native-auth/README.md).
+
+Production consumers:
+
+- [Extra Chill community](https://github.com/Extra-Chill/extrachill/tree/main/plugins/extrachill-community): Gutenberg block frontends, via `WpApiFetchTransport`.
+- [Extra Chill app](https://github.com/Extra-Chill/extrachill-app): an Expo iOS/Android app built on `wp-native-shell` and `wp-native-client`.
 
 ## Quick install
 
@@ -108,7 +113,7 @@ For a React Native consumer, the layers compose as follows:
 └──────────────────┘               └──────────────────────────┘
 ```
 
-The client doesn't know what abilities exist on a given WordPress site — **it asks.** `client.discover()` fetches the site's ability catalog, including input/output schemas and behavioral annotations. `client.execute('ability-name', args)` invokes any ability by name. Site-specific names live in consumer configuration and code, never in `wp-native-client`.
+The client doesn't know what abilities exist on a given WordPress site — **it asks.** `client.discover()` fetches the site's ability catalog, including input/output schemas and behavioral annotations. `client.execute('ability-name', args)` invokes any ability by name. For routes that aren't abilities yet, such as multipart uploads, `client.request()` calls a plain REST route through the same transport and auth. Site-specific names live in consumer configuration and code, never in `wp-native-client`.
 
 The transport depends on the consumer:
 

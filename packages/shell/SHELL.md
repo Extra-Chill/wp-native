@@ -1,6 +1,6 @@
 # wp-native-shell Public Contract
 
-`wp-native-shell@0.1.0` is an optional React Native/Expo composition layer around `wp-native-client`. It owns generic authentication, theme, navigation configuration, browser handoff, and ability-driven screen primitives. The consumer owns the expo-router route tree and all product-specific UI.
+`wp-native-shell` is an optional React Native/Expo composition layer around `wp-native-client`. It owns generic authentication, theme, navigation configuration, browser handoff, and ability-driven screen primitives. The consumer owns the expo-router route tree and all product-specific UI.
 
 ## Application Composition
 
