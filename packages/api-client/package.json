@@ -47,5 +47,9 @@
   "devDependencies": {
     "tsx": "^4.23.12",
     "typescript": "^5.7.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

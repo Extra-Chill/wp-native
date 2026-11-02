@@ -43,5 +43,9 @@
     "expo-router": ">=6",
     "react-native-gesture-handler": ">=2",
     "wp-native-client": "*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
