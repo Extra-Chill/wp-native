@@ -1,6 +1,6 @@
 {
   "name": "wp-native-shell",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "React Native app shell for wp-native. expo-router-native: providers + DrawerContent slot + ability-driven screens. Turn any WordPress site into a real native app.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
