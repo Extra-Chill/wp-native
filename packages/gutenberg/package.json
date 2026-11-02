@@ -1,7 +1,7 @@
 {
   "name": "wp-native-gutenberg",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Expo and React Native bridge for the native GutenbergKit block editor.",
   "main": "dist/index.js",
