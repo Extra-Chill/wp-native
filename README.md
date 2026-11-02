@@ -154,6 +154,17 @@ The in-repo contract files are the deep-dive material for each topic:
 | expo-router | >= 6 |
 | react-native-gesture-handler | >= 2 |
 
+## Releasing
+
+Releases are automated, and nobody tags or publishes by hand.
+
+- Merges to `main` use [conventional commits](https://www.conventionalcommits.org/). `fix:` cuts a patch, `feat:` a minor, and a breaking change a major.
+- [`.github/workflows/release.yml`](.github/workflows/release.yml) runs Homeboy's release workflow on every merge. For each package whose files changed (`packages/*/homeboy.json`), it bumps the version, writes the CHANGELOG, tags `<package>-v<version>`, creates a GitHub release, and publishes to npm.
+- npm authenticates through [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (GitHub OIDC), so no npm token is stored anywhere. Each package needs a one-time trust entry on npm: `npm trust github <package> --repo Extra-Chill/wp-native --file release.yml --yes` (npm 11.10+).
+- To release a single package with an explicit bump, run the Release workflow manually with `component` and `bump`. Use `dry-run` to preview.
+- CHANGELOGs and `version` fields are owned by the release workflow. Don't edit them in PRs.
+- `wp-native-gutenberg` is `"private": true` and is never published until its license question is settled.
+
 ## License
 
 MIT
