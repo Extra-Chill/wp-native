@@ -1,0 +1,44 @@
+name: Release
+
+# Homeboy owns releases. On every merge to main it releases each changed
+# package (packages/*/homeboy.json): version bump, changelog, tag, GitHub
+# release, and npm publish through npm Trusted Publishing (GitHub OIDC), so no
+# npm token is stored anywhere.
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Preview the releases without making changes'
+        type: boolean
+        default: false
+      component:
+        description: 'Release only this component (e.g. wp-native-client). Empty releases every changed component.'
+        type: string
+        default: ''
+      bump:
+        description: 'Explicit bump for that component: major, minor, patch or X.Y.Z.'
+        type: string
+        default: ''
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: Extra-Chill/homeboy-action/.github/workflows/release.yml@v2
+    with:
+      components: ${{ inputs.component == '' && 'all' || '' }}
+      component: ${{ inputs.component }}
+      args: ${{ inputs.component && inputs.bump && format('--bump {0} --force-lower-bump', inputs.bump) || '' }}
+      dry-run: ${{ inputs.dry-run || false }}
+    secrets: inherit
