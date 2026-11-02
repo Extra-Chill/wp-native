@@ -2,6 +2,11 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.2.1] - 2026-11-02
+
+### Fixed
+- clean rebuild before publish so stale tsbuildinfo can't drop .d.ts files
+
 ## [0.2.0] - 2026-08-15
 
 ### Added
