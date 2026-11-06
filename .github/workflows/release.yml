@@ -44,4 +44,7 @@ jobs:
       # npm Trusted Publishing (OIDC) needs npm >= 11.5.1; the runner's default
       # Node ships an older npm, which fails the publish with ENEEDAUTH.
       node-version: '24'
+      # Deploy on release instead of waiting for the poller (Extra-Chill/extrachill#1092).
+      dispatch-repo: Extra-Chill/extrachill
+      dispatch-event: component-released
     secrets: inherit
