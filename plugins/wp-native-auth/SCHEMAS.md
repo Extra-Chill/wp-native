@@ -496,6 +496,14 @@ belongs to no user yet.
 - **Brute force is bounded** (RFC 8628 §5.2): ~35.7 bits of user-code
   entropy is only safe alongside the short TTL and a per-IP attempt limit
   on the verification screen (default 20 per 15 minutes, filterable).
+- **Issuance is bounded too.** `POST /device_authorization` is
+  unauthenticated by design — a device client has no secret to present
+  before anything is approved — and every request inserts a row, which
+  capped cleanup batches may not reclaim fast enough. Per-IP limit,
+  default 30 per hour, filterable, checked after client authentication
+  and before any insert, returning `slow_down` with 429. Keyed on IP
+  rather than `client_id` because dynamic registration is open, so a
+  per-client bound is evaded by registering another client.
 - **Polling follows RFC 8628 §3.5** in this order: unknown code →
   `invalid_grant`; wrong client → `invalid_grant` *before any state
   change*, so one client cannot consume or throttle another's request;
@@ -590,6 +598,7 @@ apply_filters( 'wp_native_auth_oauth_cimd_cache_ttl', int $ttl );
 apply_filters( 'wp_native_auth_oauth_device_code_ttl', int $ttl );
 apply_filters( 'wp_native_auth_oauth_device_poll_interval', int $seconds );
 apply_filters( 'wp_native_auth_oauth_device_verify_rate_limit', int $limit );
+apply_filters( 'wp_native_auth_oauth_device_authorization_rate_limit', int $limit );
 
 // Observability.
 do_action( 'wp_native_auth_oauth_grant_issued', int $user_id, string $client_id, string $resource );

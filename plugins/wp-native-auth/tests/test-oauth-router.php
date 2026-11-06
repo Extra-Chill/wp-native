@@ -482,6 +482,182 @@ class Test_WP_Native_Auth_OAuth_Router extends WP_UnitTestCase {
 	}
 
 	// ------------------------------------------------------------------
+	// RFC 8628 device grant — two new routes plus a new grant branch on
+	// /token. None of that wiring is reachable from the unit suites,
+	// which call the cores directly: a wrong route key would 404 the
+	// endpoint while every device test stayed green.
+	// ------------------------------------------------------------------
+
+	/**
+	 * Intercept a device template render the way the response listeners
+	 * intercept a JSON send.
+	 *
+	 * The device screens terminate with `include` + `exit` rather than
+	 * through wp_native_auth_oauth_send_json(), so neither observability
+	 * action fires. The template filter is the equivalent seam.
+	 *
+	 * Returns the callback rather than taking a hook name, so every
+	 * add_filter() call site keeps a literal hook string — greppable,
+	 * and non-empty-string for static analysis.
+	 *
+	 * @return callable
+	 */
+	private function throw_on_render(): callable {
+		return static function () {
+			throw new WP_Native_Auth_Router_Response();
+		};
+	}
+
+	public function test_device_authorization_route_issues_codes_through_router(): void {
+		$this->route( 'POST', '/device_authorization' );
+		$_POST = array( 'client_id' => (string) $this->client['client_id'] );
+
+		$response = $this->run_router();
+
+		$this->assertSame( 200, $response->status );
+
+		foreach ( array( 'device_code', 'user_code', 'verification_uri', 'verification_uri_complete', 'expires_in', 'interval' ) as $key ) {
+			$this->assertArrayHasKey( $key, $response->payload, "RFC 8628 §3.2 response is missing {$key}." );
+		}
+
+		$this->assertNotEmpty( $response->payload['device_code'] );
+		$this->assertGreaterThan( 0, $response->payload['expires_in'] );
+		$this->assertStringContainsString(
+			rawurlencode( (string) $response->payload['user_code'] ),
+			(string) $response->payload['verification_uri_complete'],
+			'verification_uri_complete must carry the user code.'
+		);
+
+		// The issued code is real: it resolves back to a pending request.
+		$this->assertIsArray(
+			wp_native_auth_oauth_find_device_code_by_user_code( (string) $response->payload['user_code'] )
+		);
+	}
+
+	public function test_device_authorization_route_rejects_get_method(): void {
+		$this->route( 'GET', '/device_authorization' );
+
+		$response = $this->run_router();
+
+		$this->assertSame( 405, $response->status );
+		$this->assertSame( 'POST', $response->headers['Allow'] ?? '' );
+	}
+
+	public function test_device_authorization_route_requires_a_known_client(): void {
+		$this->route( 'POST', '/device_authorization' );
+		$_POST = array( 'client_id' => 'not-a-registered-client' );
+
+		$response = $this->run_router();
+
+		$this->assertSame( 401, $response->status );
+		$this->assertSame( 'invalid_client', $response->payload['error'] );
+	}
+
+	public function test_device_authorization_route_rejects_unknown_scope(): void {
+		$this->route( 'POST', '/device_authorization' );
+		$_POST = array(
+			'client_id' => (string) $this->client['client_id'],
+			'scope'     => 'admin',
+		);
+
+		$response = $this->run_router();
+
+		$this->assertSame( 400, $response->status );
+		$this->assertSame( 'invalid_scope', $response->payload['error'] );
+	}
+
+	/**
+	 * The device grant must be reachable at /token, not merely defined.
+	 */
+	public function test_token_route_dispatches_the_device_grant(): void {
+		$created = wp_native_auth_oauth_create_device_code( (string) $this->client['client_id'], 'account' );
+		$this->assertNotWPError( $created );
+
+		$this->route( 'POST', '/token' );
+		$_POST = array(
+			'grant_type'  => WP_NATIVE_AUTH_OAUTH_DEVICE_GRANT_TYPE,
+			'client_id'   => (string) $this->client['client_id'],
+			'device_code' => $created['device_code'],
+		);
+
+		$response = $this->run_router();
+
+		// Pending — not "unsupported_grant_type", which is what an
+		// unwired grant branch would return.
+		$this->assertSame( 'authorization_pending', $response->payload['error'] );
+	}
+
+	public function test_token_route_completes_an_approved_device_grant(): void {
+		$created = wp_native_auth_oauth_create_device_code( (string) $this->client['client_id'], 'account' );
+		$this->assertNotWPError( $created );
+
+		$row = wp_native_auth_oauth_find_device_code_by_user_code( $created['user_code'] );
+		$this->assertIsArray( $row );
+		$this->assertTrue(
+			wp_native_auth_oauth_decide_device_code( (int) $row['id'], $this->user_id, 'approved' )
+		);
+
+		$this->route( 'POST', '/token' );
+		$_POST = array(
+			'grant_type'  => WP_NATIVE_AUTH_OAUTH_DEVICE_GRANT_TYPE,
+			'client_id'   => (string) $this->client['client_id'],
+			'device_code' => $created['device_code'],
+		);
+
+		$response = $this->run_router();
+
+		$this->assertSame( 200, $response->status );
+		$this->assertArrayHasKey( 'access_token', $response->payload );
+		$this->assertSame( 'Bearer', $response->payload['token_type'] );
+	}
+
+	public function test_device_verification_route_renders_the_entry_form(): void {
+		add_filter( 'wp_native_auth_oauth_device_form_template', $this->throw_on_render() );
+
+		$this->route( 'GET', '/device' );
+
+		// Reaching the form template proves the route is claimed and
+		// dispatched to the verification handler. run_router() fails the
+		// test if nothing throws, but assert explicitly so this never
+		// counts as a risky, assertion-less test.
+		$this->assertInstanceOf( WP_Native_Auth_Router_Response::class, $this->run_router() );
+	}
+
+	public function test_device_verification_route_shows_consent_for_a_valid_code(): void {
+		$created = wp_native_auth_oauth_create_device_code( (string) $this->client['client_id'], 'account' );
+		$this->assertNotWPError( $created );
+
+		add_filter( 'wp_native_auth_oauth_consent_template', $this->throw_on_render() );
+
+		$this->route( 'GET', '/device' );
+		$_GET = array( 'user_code' => $created['user_code'] );
+
+		// A valid code routes to the shared consent screen, not the
+		// entry form — proving the device flow reuses that template.
+		$this->assertInstanceOf( WP_Native_Auth_Router_Response::class, $this->run_router() );
+	}
+
+	public function test_device_verification_route_sends_anonymous_users_to_login(): void {
+		wp_set_current_user( 0 );
+
+		$this->route( 'GET', '/device' );
+
+		$response = $this->run_router();
+
+		$this->assertSame( 302, $response->status );
+		$this->assertStringContainsString( 'wp-login.php', (string) $response->payload['redirect'] );
+	}
+
+	public function test_device_verification_route_rejects_put_method(): void {
+		$this->route( 'PUT', '/device' );
+
+		$response = $this->run_router();
+
+		$this->assertSame( 405, $response->status );
+		$this->assertSame( 'GET, POST', $response->headers['Allow'] ?? '' );
+	}
+
+	// ------------------------------------------------------------------
 	// The router must not claim paths WordPress actually resolved.
 	// ------------------------------------------------------------------
 
