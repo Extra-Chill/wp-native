@@ -2,6 +2,11 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.5.0] - 2026-11-15
+
+### Added
+- push token registration and generic send primitive
+
 ## [0.4.3] - 2026-10-14
 
 ### Fixed
