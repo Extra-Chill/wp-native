@@ -409,6 +409,9 @@ function wp_native_auth_revoke_token_family( string $token_family ): int {
 		)
 	);
 
+	// A revoked family must not keep a deliverable push destination.
+	wp_native_auth_clear_token_family_push_tokens( $token_family, 'family_revoked' );
+
 	return is_numeric( $revoked ) ? (int) $revoked : 0;
 }
 
@@ -755,6 +758,10 @@ function wp_native_auth_revoke_refresh_token( int $user_id, string $device_id ):
 
 	$revoked = ( false !== $updated && $updated > 0 );
 
+	// A signed-out device must not keep a deliverable push destination.
+	// Cleared even when the row was already revoked, so no stale token stays.
+	wp_native_auth_clear_push_token( $user_id, $device_id, 'logout' );
+
 	if ( $revoked ) {
 		/**
 		 * Fires after a refresh token is revoked (logout / remote sign-out).
@@ -820,6 +827,9 @@ function wp_native_auth_revoke_user_refresh_tokens( int $user_id ) {
 	}
 
 	$revoked = (int) $updated;
+
+	// No revoked session keeps a deliverable push destination.
+	wp_native_auth_clear_user_push_tokens( $user_id, 'sessions_revoked' );
 
 	/**
 	 * Fires after user-wide refresh-session revocation succeeds.

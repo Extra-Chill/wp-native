@@ -37,6 +37,8 @@ CREATE TABLE {$table_name} (
   prev_token_hash char(64) NULL,
   oauth_client_id varchar(255) NULL,
   resource varchar(255) NULL,
+  push_token varchar(255) NULL,
+  push_provider varchar(32) NULL,
   created_at datetime NOT NULL,
   last_used_at datetime NULL,
   expires_at datetime NOT NULL,
@@ -47,11 +49,19 @@ CREATE TABLE {$table_name} (
   KEY token_family (token_family),
   KEY refresh_token_hash (refresh_token_hash),
   KEY prev_token_hash (prev_token_hash),
+  KEY push_token (push_token(191)),
   KEY expires_at (expires_at)
 ) {$charset_collate};
 ```
 
 Hash algorithm: `hash( 'sha256', $token, false )` — 64 hex chars. Plaintext refresh tokens are returned to the client exactly once (issue + rotate) and never persisted.
+
+### Push columns (v7)
+
+- **`push_token`** (`varchar(255)` NULL) — the push destination registered by this device session (`wp-native-auth/register-push-token`). NULL when the device has no push destination. A given token is bound to at most one row: registering it on a session clears it from every other row first.
+- **`push_provider`** (`varchar(32)` NULL) — the provider id the token belongs to; a key of the `wp_native_auth_push_transports` filter. NULL whenever `push_token` is NULL.
+
+The push destination lives on the session row, so there is no second device registry. See [Push](#push-118) for the lifecycle.
 
 ### OAuth grant columns (v5)
 
@@ -77,6 +87,7 @@ compared against the `WP_NATIVE_AUTH_SCHEMA_VERSION` constant in `inc/db.php`:
 - **v4** — binds continuation state to blog and issuing policy, adds one stable account-policy rate-limit identity, and adds atomic claim fields.
 - **v5** — generic OAuth 2.1 authorization server (#80): adds `oauth_client_id` + `resource` columns and `refresh_token_hash` / `prev_token_hash` indexes to the refresh tokens table, and adds the `wp_native_auth_oauth_clients` and `wp_native_auth_oauth_authorization_codes` tables.
 - **v6** — device authorization grant (#91): adds the `wp_native_auth_oauth_device_codes` table. Purely additive — one new table, no change to any existing one, so installs that never use the device grant are unaffected.
+- **v7** — push token registration (#118): adds NULL-able `push_token` + `push_provider` columns and a `push_token` index to the refresh tokens table via the same additive dbDelta migration. Existing sessions keep working and simply have no push destination until the client registers one.
 
 ```sql
 CREATE TABLE {$wpdb->base_prefix}wp_native_auth_login_continuations (
@@ -120,6 +131,8 @@ and it is acceptable.
 3. **Reuse detected** — a token matching `prev_token_hash` (or the 0-rows-affected race) revokes the **entire `token_family`** (`wp_native_auth_revoke_token_family()`), fires `wp_native_auth_refresh_token_reuse_detected`, and returns `refresh_token_reused` (401).
 4. **Logout/Revoke** — `wp_native_auth_revoke_refresh_token()` sets `revoked_at` for one device. `wp_native_auth_revoke_user_refresh_tokens()` atomically sets it for every active device and token family owned by one user.
 5. **Password changes** — the canonical WordPress `wp_set_password` lifecycle invokes user-wide revocation, covering direct password writes, authenticated `wp_update_user()` changes, and `reset_password()`. Existing access tokens are site transients and remain valid only until their normal 15-minute expiry; no revoked refresh token can mint a replacement. User-wide revocation returns the affected-row count (including `0` for an idempotent no-op) or `WP_Error` on storage failure, and emits distinct success/failure actions.
+
+6. **Push destinations** — every path above that ends a session also clears its `push_token` / `push_provider` (logout and remote revoke, user-wide revocation, family revocation on reuse). Expired rows never receive push and their tokens are cleared the next time a send touches the user.
 
 ## Common types referenced below
 
@@ -811,6 +824,155 @@ Same output and error shape as `auth.logout`.
 
 ---
 
+### `wp-native-auth/register-push-token`
+
+**Category:** `wp-native-auth`
+**Label:** Register a push token for this device session
+**REST:** `show_in_rest: true` — `POST /wp-json/wp-abilities/v1/abilities/wp-native-auth/register-push-token/run`
+**Auth:** bearer access token of a **native** device session. The device is taken from the bearer token, never from input. Cookie sessions (no device) and OAuth-bound sessions are rejected.
+
+Binds `token` to the calling session's `(user_id, device_id)` row. Re-registering replaces the previous token in place. If the same token is bound to another row (another device, or another user on a shared handset) it is cleared there first (`reason = reassigned`).
+
+#### Input schema
+
+```json
+{
+  "type": "object",
+  "required": ["token"],
+  "additionalProperties": false,
+  "properties": {
+    "token":    { "type": "string", "minLength": 1, "maxLength": 255 },
+    "provider": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$", "default": "expo" }
+  }
+}
+```
+
+`token` is opaque to the plugin: any printable, whitespace-free ASCII string up to 255 chars. `provider` must be a registered transport id.
+
+#### Output schema
+
+```json
+{
+  "type": "object",
+  "required": ["registered", "device_id", "provider"],
+  "additionalProperties": false,
+  "properties": {
+    "registered": { "type": "boolean" },
+    "device_id":  { "type": "string" },
+    "provider":   { "type": "string" }
+  }
+}
+```
+
+#### Error codes
+
+| Code | Status | Meaning |
+|---|---|---|
+| `not_authenticated` | 401 | No authenticated user |
+| `bearer_session_required` | 401 | The request is not authenticated by a bearer access token |
+| `push_requires_native_session` | 403 | The bearer token belongs to an OAuth grant |
+| `invalid_push_token` | 400 | Empty, too long, or contains whitespace/control characters |
+| `unsupported_push_provider` | 400 | `provider` is not a registered transport |
+| `session_not_found` | 404 | The calling device session is revoked or expired |
+| `push_token_storage_failed` | 500 | The database update failed |
+
+---
+
+### `wp-native-auth/unregister-push-token`
+
+**Category:** `wp-native-auth`
+**Label:** Unregister the push token for this device session
+**REST:** `show_in_rest: true`
+**Auth:** same as `register-push-token`.
+
+Input: empty object (`{}`; defaults to `{}` when omitted). Output: `{ "cleared": boolean }` — `false` when the session had no token. Idempotent. Errors: `not_authenticated`, `bearer_session_required`, `push_requires_native_session`.
+
+---
+
+## Push (#118)
+
+Generic push sending on top of the session rows. No product strings and no vendor knowledge outside the bundled transport file.
+
+### PHP API
+
+```php
+wp_native_auth_send_push( int $user_id, array $message ): array
+```
+
+`$message`:
+
+| Key | Type | Required | Notes |
+|---|---|---|---|
+| `title` | string | yes | Non-empty |
+| `body` | string | no | |
+| `data` | array | no | Arbitrary payload delivered to the app |
+| `collapse_id` | string | no | Lets the client coalesce related notifications |
+
+Targets are every **active** (unrevoked, unexpired), **native** (`oauth_client_id IS NULL`) session of the user with a `push_token`. The call is **non-blocking**: targets are snapshotted, one delivery job is queued — Action Scheduler (`as_enqueue_async_action`, group `wp-native-auth`) when available and initialized, otherwise `wp_schedule_single_event( time(), … )` — and the function returns immediately. Each job carries a unique `job_id`, so identical messages are never collapsed.
+
+Return value (queue receipt):
+
+```php
+array(
+  'user_id' => 42,
+  'queued'  => true,
+  'job_id'  => '…uuid…',            // null when not queued
+  'devices' => array(
+    array( 'device_id' => '…', 'provider' => 'expo', 'status' => 'queued' ),
+    // status: queued | unsupported_provider | queue_failed
+  ),
+  // 'error' => 'invalid_message' | 'no_devices' | 'queue_failed'  (only when queued = false)
+)
+```
+
+The background hook `wp_native_auth_deliver_push` (`wp_native_auth_deliver_push( array $job ): array`) re-reads the sessions at delivery time, so a device revoked or unregistered after queueing receives nothing. It groups targets by provider, calls each transport once, clears tokens reported `invalid_token`, and fires `wp_native_auth_push_sent` with the delivery summary:
+
+```php
+array(
+  'user_id'     => 42,
+  'job_id'      => '…',
+  'devices'     => array(
+    array( 'device_id' => '…', 'provider' => 'expo', 'status' => 'ok', 'id' => 'provider-ticket-id' ),
+    array( 'device_id' => '…', 'provider' => 'expo', 'status' => 'invalid_token', 'error' => 'DeviceNotRegistered' ),
+    // status: ok | error | invalid_token | unsupported_provider
+  ),
+  'sent'        => 1,
+  'failed'      => 1,
+  'invalidated' => 1,
+)
+```
+
+### Transports
+
+```php
+apply_filters( 'wp_native_auth_push_transports', array $transports ); // provider id => transport
+```
+
+A transport is a callable, a class name whose instances expose `send()`, or an object exposing `send()`. It is invoked as `transport( array $deliveries, array $message ): array`:
+
+- `$deliveries` — list of `array{ device_id: string, token: string }`.
+- `$message` — the normalized message (`title`, `body`, `data`, `collapse_id`; absent keys are `''` / `[]`).
+- Returns a list of receipts **in the same order**: `array{ status: 'ok'|'error'|'invalid_token', error?: string, id?: string }`. A missing receipt counts as `error`; a thrown exception marks the whole batch `error`.
+
+Returning `invalid_token` clears that device's token (`reason = invalid_token`).
+
+**Bundled `expo` transport** (`inc/push-transports/expo.php`, the only file that names the vendor): POSTs to `https://exp.host/--/api/v2/push/send` in batches of at most 100 messages, maps each push ticket in order, and reports `DeviceNotRegistered` as `invalid_token`. `expo` is the default provider for registrations that omit `provider` (`WP_NATIVE_AUTH_PUSH_DEFAULT_PROVIDER`). Messages are sent with `sound: "default"`; Expo has no collapse-key field, so `collapse_id` is delivered inside `data.collapse_id`. Optional hooks: `wp_native_auth_expo_push_message` (decorate each Expo message, e.g. `badge`, `channelId`) and `wp_native_auth_expo_push_access_token` (Expo enhanced-security access token). Asynchronous push *receipts* (the second Expo phase) are not polled.
+
+### Token lifecycle
+
+| Event | Effect | `cleared` reason |
+|---|---|---|
+| `register-push-token` on the same session | token replaced in place | — |
+| same token registered on another row | cleared on the other row first | `reassigned` |
+| `unregister-push-token` | cleared | `unregistered` |
+| logout / `auth-revoke-session` (`wp_native_auth_revoke_refresh_token()`) | cleared | `logout` |
+| user-wide revocation (password change) | every user token cleared | `sessions_revoked` |
+| refresh-token reuse (family revocation) | family tokens cleared | `family_revoked` |
+| session expiry | never targeted; cleared on the next send to the user | `expired` |
+| transport reports `invalid_token` | cleared | `invalid_token` |
+
+---
+
 ### `wp-native/auth-browser-handoff`
 
 **Category:** `wp-native-auth`
@@ -991,6 +1153,12 @@ apply_filters( 'wp_native_auth_revalidate_login', null, $user, $context );
 
 // Observe/override the boolean result of access-token cache persistence.
 apply_filters( 'wp_native_auth_access_token_storage_result', $stored, $token_hash, $user_id, $device_id );
+
+// Map push provider ids to transports (callable | class-string | object with send()).
+apply_filters( 'wp_native_auth_push_transports', $transports );
+
+// Force or disable Action Scheduler for push delivery jobs.
+apply_filters( 'wp_native_auth_push_use_action_scheduler', $use_action_scheduler, $job );
 ```
 
 ### Actions
@@ -1016,6 +1184,17 @@ do_action( 'wp_native_auth_after_logout', $user_id, $device_id );
 // already been revoked when this fires. Generic seam for consumers to
 // alarm/log; this plugin knows nothing about who consumes it.
 do_action( 'wp_native_auth_refresh_token_reuse_detected', $user_id, $device_id, $token_family );
+
+// Fired after a push token is bound to a device session.
+do_action( 'wp_native_auth_push_token_registered', $user_id, $device_id, $provider );
+
+// Fired after a push token is removed from a device session. $reason is one of
+// unregistered, reassigned, logout, sessions_revoked, family_revoked, expired,
+// invalid_token.
+do_action( 'wp_native_auth_push_token_cleared', $user_id, $device_id, $reason );
+
+// Fired after a queued push job is delivered to its transports.
+do_action( 'wp_native_auth_push_sent', $user_id, $summary, $message );
 ```
 
 Registration callbacks call:
