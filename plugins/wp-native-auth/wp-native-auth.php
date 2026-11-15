@@ -60,6 +60,13 @@ require_once WP_NATIVE_AUTH_PLUGIN_DIR . 'inc/external-tokens.php';
 // Token service (login, refresh, revoke, sessions, user payload).
 require_once WP_NATIVE_AUTH_PLUGIN_DIR . 'inc/service.php';
 
+// Generic push-token registration and background push delivery, bound to
+// the per-device session rows above.
+require_once WP_NATIVE_AUTH_PLUGIN_DIR . 'inc/push.php';
+
+// Bundled push transport(s), registered on wp_native_auth_push_transports.
+require_once WP_NATIVE_AUTH_PLUGIN_DIR . 'inc/push-transports/expo.php';
+
 // Password changes end every refresh chain for the affected user.
 add_action( 'wp_set_password', 'wp_native_auth_revoke_refresh_sessions_on_password_change', 10, 2 );
 

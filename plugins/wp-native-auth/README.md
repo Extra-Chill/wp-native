@@ -6,7 +6,7 @@ Generic token-based authentication for native and headless WordPress consumers, 
 
 ## Abilities
 
-The plugin registers nine abilities:
+The plugin registers eleven abilities:
 
 | Ability | Purpose |
 |---|---|
@@ -19,6 +19,8 @@ The plugin registers nine abilities:
 | `wp-native/auth-revoke-session` | Revoke another device session |
 | `wp-native/auth-browser-handoff` | Mint a one-time URL that establishes a browser session |
 | `wp-native/auth-register` | Create an account and device session |
+| `wp-native-auth/register-push-token` | Bind a push token to the calling bearer device session |
+| `wp-native-auth/unregister-push-token` | Clear the calling device session's push token |
 
 Clients discover and execute these through the standard Abilities REST surface:
 
@@ -50,6 +52,23 @@ POST /revoke                                   RFC 7009 revocation
 - Consent ships as a minimal template replaced via the `wp_native_auth_oauth_consent_template` filter; branded UI belongs to hosts.
 
 OAuth grants are **not** a second token store: each `(user, client)` pair maps onto a row of the existing per-device refresh-token table (stable derived device id), so refresh rotation, sliding expiry, reuse detection, and token-family revocation are the pre-existing lifecycle. The branded consent screen and Connected Apps management are host-layer concerns.
+
+## Push
+
+Push destinations live on the per-device session row (`push_token`, `push_provider`; schema v7) — no second device registry. Native apps register with `wp-native-auth/register-push-token` using their bearer session; logout, session revocation, password changes, refresh-family revocation, and expiry all leave no deliverable token.
+
+Server code sends with:
+
+```php
+$receipt = wp_native_auth_send_push( $user_id, array(
+	'title'       => 'Title',
+	'body'        => 'Optional body',
+	'data'        => array( 'route' => '/somewhere' ),
+	'collapse_id' => 'optional-group',
+) );
+```
+
+The call queues a background job (Action Scheduler when present, otherwise WP-Cron) and returns a per-device summary immediately. Providers plug in through the `wp_native_auth_push_transports` filter; an Expo Push API transport ships in `inc/push-transports/expo.php`. Observe with `wp_native_auth_push_token_registered`, `wp_native_auth_push_token_cleared`, and `wp_native_auth_push_sent`. See [`SCHEMAS.md`](SCHEMAS.md#push-118).
 
 ## Architecture
 

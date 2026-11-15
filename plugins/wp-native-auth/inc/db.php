@@ -38,8 +38,12 @@ defined( 'ABSPATH' ) || exit;
  *   6 — device authorization grant (#91): adds the OAuth device codes
  *       table. Purely additive — a new table, no change to any existing
  *       one, so installs that never use the device grant are unaffected.
+ *   7 — push token registration (#118): adds nullable push_token and
+ *       push_provider columns (plus a push_token index) to the refresh
+ *       tokens table so a push destination is bound to the existing
+ *       per-device session row. Purely additive — no second registry.
  */
-const WP_NATIVE_AUTH_SCHEMA_VERSION = 6;
+const WP_NATIVE_AUTH_SCHEMA_VERSION = 7;
 
 /**
  * Network option key storing the installed schema version.
@@ -111,6 +115,8 @@ function wp_native_auth_oauth_device_codes_table_name(): string {
  *     rows survive untouched and their current refresh tokens keep working.
  *   - `oauth_client_id` and `resource` are added NULL-able; NULL means the
  *     row is a native app session, not an OAuth grant.
+ *   - `push_token` and `push_provider` are added NULL-able; NULL means the
+ *     device session has no registered push destination.
  *   - dbDelta() only emits ALTER TABLE ADD COLUMN for the missing columns;
  *     it never drops or rewrites existing data.
  * After dbDelta runs, legacy rows missing a token_family are backfilled
@@ -138,6 +144,8 @@ function wp_native_auth_install_refresh_tokens_table(): void {
 		prev_token_hash char(64) NULL,
 		oauth_client_id varchar(255) NULL,
 		resource varchar(255) NULL,
+		push_token varchar(255) NULL,
+		push_provider varchar(32) NULL,
 		created_at datetime NOT NULL,
 		last_used_at datetime NULL,
 		expires_at datetime NOT NULL,
@@ -148,6 +156,7 @@ function wp_native_auth_install_refresh_tokens_table(): void {
 		KEY token_family (token_family),
 		KEY refresh_token_hash (refresh_token_hash),
 		KEY prev_token_hash (prev_token_hash),
+		KEY push_token (push_token(191)),
 		KEY expires_at (expires_at)
 	) {$charset_collate};";
 
