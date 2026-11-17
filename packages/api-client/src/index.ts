@@ -31,7 +31,7 @@ export type {
   TransportRequest,
   TransportResponse,
 } from './transports/types';
-export { FetchTransport, ApiError } from './transports/fetch';
-export type { FetchTransportConfig } from './transports/fetch';
+export { FetchTransport, ApiError, isApiError } from './transports/fetch';
+export type { ApiErrorData, FetchTransportConfig } from './transports/fetch';
 export { AuthFetchTransport } from './transports/auth-fetch';
 export type { AuthFetchTransportConfig, StoredTokens } from './transports/auth-fetch';

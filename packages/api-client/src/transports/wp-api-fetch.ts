@@ -45,12 +45,12 @@ export class WpApiFetchTransport implements Transport {
       return result;
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error) {
-        const wpError = error as { code: string; message: string; data?: { status: number } };
-        throw new ApiError(
-          wpError.message,
-          wpError.code,
-          wpError.data?.status || 500
-        );
+        const wpError = error as { code: string; message: string; data?: unknown };
+        const data = wpError.data && typeof wpError.data === 'object' && !Array.isArray(wpError.data)
+          ? (wpError.data as Record<string, unknown>)
+          : {};
+        const status = typeof data.status === 'number' && data.status > 0 ? data.status : 500;
+        throw new ApiError(wpError.message, wpError.code, status, data);
       }
       throw error;
     }

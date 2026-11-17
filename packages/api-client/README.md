@@ -104,7 +104,31 @@ segments (including percent-encoded ones) are rejected before any request is
 sent, so credentials never leave the root. `method` defaults to `GET`. `query`
 uses the same bracket encoding as ability input (`{ ids: [1, 2] }` →
 `ids[0]=1&ids[1]=2`). Non-2xx responses throw `ApiError` with the WP_Error
-`code`, `message` and HTTP `status`.
+`code`, `message`, HTTP `status` and `data`.
+
+### Errors
+
+Ability calls and `request()` throw `ApiError` for any non-2xx response. It
+keeps the whole WP_Error, including its `data` object, so callers can act on
+details such as `retry_after`, a rotated token, or a re-verification hint:
+
+```ts
+import { isApiError } from 'wp-native-client';
+
+try {
+  await client.execute('my-plugin/verify-code', { code });
+} catch (error) {
+  if (isApiError(error) && error.status === 429) {
+    const seconds = Number(error.data.retry_after ?? 30);
+    // ...count down, then let the user retry
+  }
+}
+```
+
+`data` is `{}` when the server sent none. `isApiError()` also recognizes errors
+from a second copy of the package, where `instanceof` fails. A 401 still goes
+through the refresh-and-retry path first; if the retried request fails, the
+thrown error carries that response's WP_Error.
 
 ### Three transports
 
@@ -138,7 +162,8 @@ const posts = await client.execute('wp/post.list', { per_page: 10 });
 - **`AuthFetchTransport`** — authenticated fetch with automatic token refresh and 401 retry.
 - **`FetchTransport`** — plain fetch, no auth.
 - **`WpApiFetchTransport`** — wraps `@wordpress/api-fetch` for block contexts. Separate entry point: `wp-native-client/wordpress`.
-- **`ApiError`** — structured error with `code`, `message`, `status`.
+- **`ApiError`** — structured error with `code`, `message`, `status` and the WP_Error `data` object.
+- **`isApiError(value)`** — type guard for `ApiError`, safe across duplicate package copies.
 
 ### Abilities
 
