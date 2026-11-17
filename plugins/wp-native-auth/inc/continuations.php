@@ -16,7 +16,11 @@ $GLOBALS['wp_native_auth_challenge_policies'] = array();
  *
  * @param string   $policy_id         Stable generic identifier.
  * @param callable $challenge_callback Returns null, WP_Error, or a public challenge array.
- * @param callable $verify_callback    Returns true, false, or WP_Error.
+ * @param callable $verify_callback    Returns true to complete login, a public
+ *                                    challenge array to re-challenge without
+ *                                    consuming the continuation (e.g. a code
+ *                                    was re-sent), WP_Error to reject with a
+ *                                    policy error, or false to reject.
  * @return bool True when registered; false for invalid or duplicate IDs.
  */
 function wp_native_auth_register_challenge_policy( string $policy_id, callable $challenge_callback, callable $verify_callback ): bool {
@@ -286,6 +290,15 @@ function wp_native_auth_continue_login( string $token, string $device_id, array 
 		return $verified;
 	}
 
+	// A re-challenge (for example a re-sent code) keeps the pending login
+	// alive: the claim is released and the same continuation is returned with
+	// the policy's fresh public descriptor. The attempt already counted, so a
+	// re-challenge loop still exhausts the shared attempt budget.
+	if ( is_array( $verified ) ) {
+		wp_native_auth_release_continuation_claim( (int) $row['id'], $claim_token );
+		return wp_native_auth_build_rechallenge_response( $policy_id, $verified, $token, $row );
+	}
+
 	if ( true !== $verified ) {
 		wp_native_auth_release_continuation_claim( (int) $row['id'], $claim_token );
 		return new WP_Error( 'challenge_rejected', __( 'The authentication challenge was not completed.', 'wp-native-auth' ), array( 'status' => 401 ) );
@@ -323,7 +336,10 @@ function wp_native_auth_continue_login( string $token, string $device_id, array 
 		return wp_native_auth_continuation_error( $token_hash, $blog_id, wp_native_auth_mysql_gmt( time() ) );
 	}
 
-	$result = wp_native_auth_complete_login( $user, $device_id, (array) $request['login_options'] );
+	$login_options                     = (array) $request['login_options'];
+	$login_options['challenge_policy'] = $policy_id;
+
+	$result = wp_native_auth_complete_login( $user, $device_id, $login_options );
 	if ( is_wp_error( $result ) ) {
 		wp_native_auth_release_continuation_claim( (int) $row['id'], $consumed_claim );
 		return $result;
@@ -341,6 +357,36 @@ function wp_native_auth_continue_login( string $token, string $device_id, array 
 	);
 
 	return $result;
+}
+
+/**
+ * Build the response for a verifier that re-issued its challenge.
+ *
+ * @param string              $policy_id Issuing policy.
+ * @param array<mixed>        $challenge Public challenge descriptor from the verifier.
+ * @param string              $token     Presented continuation bearer (still valid).
+ * @param array<string,mixed> $row       Claimed continuation row.
+ * @return array<string,mixed>|WP_Error
+ */
+function wp_native_auth_build_rechallenge_response( string $policy_id, array $challenge, string $token, array $row ) {
+	if ( empty( $challenge['type'] ) || ! is_string( $challenge['type'] ) ) {
+		return new WP_Error( 'invalid_challenge_contract', __( 'Authentication policy returned an invalid challenge.', 'wp-native-auth' ), array( 'status' => 500 ) );
+	}
+
+	// The attempt that produced this re-challenge may have been the last one;
+	// handing back a continuation that can never be redeemed would only stall
+	// the client, so report the exhausted budget instead.
+	if ( (int) $row['attempts'] >= WP_NATIVE_AUTH_CONTINUATION_MAX_ATTEMPTS ) {
+		return new WP_Error( 'continuation_rate_limited', __( 'Too many authentication challenge attempts.', 'wp-native-auth' ), array( 'status' => 429 ) );
+	}
+
+	return array(
+		'challenge_required'      => true,
+		'challenge_policy'        => $policy_id,
+		'challenge'               => $challenge,
+		'continuation_token'      => $token,
+		'continuation_expires_at' => gmdate( 'c', (int) strtotime( (string) $row['expires_at'] . ' UTC' ) ),
+	);
 }
 
 /** Return a non-oracular continuation error after an atomic match fails. */

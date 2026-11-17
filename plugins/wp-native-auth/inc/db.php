@@ -42,8 +42,13 @@ defined( 'ABSPATH' ) || exit;
  *       push_provider columns (plus a push_token index) to the refresh
  *       tokens table so a push destination is bound to the existing
  *       per-device session row. Purely additive — no second registry.
+ *   8 — per-session challenge verification (#120): adds nullable
+ *       challenge_policy and challenge_verified_at columns to the refresh
+ *       tokens table so a device session records which authentication
+ *       challenge policy it passed and when it last (re-)verified it.
+ *       Purely additive — existing sessions read as never verified.
  */
-const WP_NATIVE_AUTH_SCHEMA_VERSION = 7;
+const WP_NATIVE_AUTH_SCHEMA_VERSION = 8;
 
 /**
  * Network option key storing the installed schema version.
@@ -117,6 +122,8 @@ function wp_native_auth_oauth_device_codes_table_name(): string {
  *     row is a native app session, not an OAuth grant.
  *   - `push_token` and `push_provider` are added NULL-able; NULL means the
  *     device session has no registered push destination.
+ *   - `challenge_policy` and `challenge_verified_at` are added NULL-able;
+ *     NULL means the session never passed an authentication challenge.
  *   - dbDelta() only emits ALTER TABLE ADD COLUMN for the missing columns;
  *     it never drops or rewrites existing data.
  * After dbDelta runs, legacy rows missing a token_family are backfilled
@@ -146,6 +153,8 @@ function wp_native_auth_install_refresh_tokens_table(): void {
 		resource varchar(255) NULL,
 		push_token varchar(255) NULL,
 		push_provider varchar(32) NULL,
+		challenge_policy varchar(191) NULL,
+		challenge_verified_at datetime NULL,
 		created_at datetime NOT NULL,
 		last_used_at datetime NULL,
 		expires_at datetime NOT NULL,

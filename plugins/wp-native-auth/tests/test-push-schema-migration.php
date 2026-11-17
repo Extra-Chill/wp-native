@@ -51,7 +51,7 @@ class Test_WP_Native_Auth_Push_Schema_Migration extends WP_UnitTestCase {
 		wp_native_auth_maybe_upgrade_schema();
 
 		$columns = $this->columns();
-		$this->assertSame( 7, (int) get_site_option( WP_NATIVE_AUTH_SCHEMA_VERSION_OPTION ) );
+		$this->assertSame( WP_NATIVE_AUTH_SCHEMA_VERSION, (int) get_site_option( WP_NATIVE_AUTH_SCHEMA_VERSION_OPTION ) );
 		$this->assertArrayHasKey( 'push_token', $columns );
 		$this->assertArrayHasKey( 'push_provider', $columns );
 		$this->assertSame( 'YES', $columns['push_token']->Null );
