@@ -2,6 +2,11 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.6.0] - 2026-11-17
+
+### Added
+- per-session challenge verification + verifier re-challenge
+
 ## [0.5.0] - 2026-11-15
 
 ### Added
