@@ -1092,19 +1092,21 @@ Authenticated via Bearer token. The `user_id` is derived from the bearer token, 
 #### Token semantics
 
 - Token: 43-character base64url-encoded random string via `wp_native_auth_generate_opaque_token()` (256 random bits, RFC 7235 b64token alphabet)
-- Storage: transient keyed `wp_native_auth_handoff_<sha256(token)>` → `{ user_id: int, created_at: int }`
+- Storage: transient keyed `wp_native_auth_handoff_<sha256(token)>` → `{ user_id: int, device_id: string|null, created_at: int }`. `device_id` is the bearer session that minted the token (null when minted without one).
 - TTL: 60 seconds (constant `WP_NATIVE_AUTH_HANDOFF_TOKEN_TTL`)
 - Single-use: transient is deleted on validation regardless of outcome
 
 #### Receiver side
 
-The plugin hooks `init` (priority 1) to check for `?wp-native-handoff=<token>`. On valid token:
+The plugin hooks `init` (priority 1) to check for `?wp-native-handoff=<token>`. The token is consumed (deleted from the transient store), then `wp_native_auth_check_browser_handoff()` decides whether a cookie may be set:
 
-1. Token is consumed (deleted from transient store)
-2. `wp_set_current_user()` + `wp_set_auth_cookie()` establish a WP session
-3. `wp_safe_redirect()` to the original URL minus the handoff query param
+1. If the token recorded a device session, that session must still be active (`handoff_session_inactive` otherwise).
+2. Registered challenge policies run as they do for a login, with `reason` and `phase` set to `browser_handoff`. The first policy that would challenge the user decides: the minting session must have passed **that** policy (`challenge_policy` matches and `challenge_verified_at` is set). Otherwise the handoff is refused with `handoff_challenge_required`. A handoff minted without a bearer session cannot satisfy a challenging policy. Challenge callbacks are probed here, so they should not deliver codes when `reason` is `browser_handoff`.
+3. The `wp_native_auth_pre_browser_handoff` filter (`null|WP_Error`, `WP_User $user`, `array{device_id, session, challenge_policy}`) may refuse a handoff the policies allowed. It cannot allow one they refused.
 
-On invalid/expired token, the handler calls `wp_die()` with a 403 response.
+When allowed: `wp_set_current_user()` + `wp_set_auth_cookie()`, `wp_login` fires, `wp_native_auth_after_browser_handoff` fires, and the browser is redirected to the original URL minus the handoff query param.
+
+When refused, or when the token is invalid or expired: no cookie is set, `wp_native_auth_browser_handoff_refused` fires (`int $user_id`, `WP_Error $error`), and the browser is redirected to `wp_login_url( <destination> )` (filterable through `wp_native_auth_browser_handoff_refused_redirect`). A browser already signed in as the handoff's user goes straight to the destination.
 
 #### Error codes
 
