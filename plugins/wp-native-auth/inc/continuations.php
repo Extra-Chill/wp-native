@@ -57,6 +57,90 @@ function wp_native_auth_get_challenge_policies(): array {
 	return $GLOBALS['wp_native_auth_challenge_policies'];
 }
 
+/**
+ * Run the registered challenge policies for an already authenticated user.
+ *
+ * The password login runs this loop itself. Integrations that verify the
+ * primary credential some other way (an identity provider token, a magic
+ * link) call it before minting a session, so no primary authenticator can
+ * skip a policy that would challenge the same account.
+ *
+ * Policies run in registration order and the first public challenge wins.
+ * The pending login, including `$login_options`, is bound to an opaque
+ * continuation redeemed through wp_native_auth_continue_login(), which
+ * completes the login with wp_native_auth_complete_login().
+ *
+ * @param WP_User             $user          User whose primary credential was already verified.
+ * @param string              $device_id     Device UUID the session will belong to.
+ * @param array<string,mixed> $login_options Options for wp_native_auth_complete_login(): device_name, remember, set_cookie.
+ *                                           Extra keys are stored with the pending login and ignored by the core flow.
+ * @param array<string,mixed> $context       Login context passed to policies and to the continuation phase. Keys
+ *                                           device_id, client_id, blog_id, reason, and phase default when absent.
+ * @return array<string,mixed>|WP_Error|null Challenge response, WP_Error from a policy or storage, or null when no
+ *                                           policy challenged and the caller may complete the login.
+ */
+function wp_native_auth_challenge_login( WP_User $user, string $device_id, array $login_options, array $context = array() ) {
+	if ( ! wp_native_auth_is_uuid_v4( $device_id ) ) {
+		return new WP_Error( 'invalid_device_id', __( 'device_id must be a UUID v4.', 'wp-native-auth' ), array( 'status' => 400 ) );
+	}
+
+	$login_context = array_merge(
+		array(
+			'device_id' => $device_id,
+			'client_id' => wp_native_auth_get_client_id(),
+			'blog_id'   => get_current_blog_id(),
+			'reason'    => 'login',
+			'phase'     => 'primary',
+		),
+		$context
+	);
+
+	$pending_request = array(
+		'pending_request_id' => wp_generate_uuid4(),
+		'user_id'            => (int) $user->ID,
+		'blog_id'            => get_current_blog_id(),
+		'device_id'          => $device_id,
+		'client_id'          => wp_native_auth_get_client_id(),
+		'login_context'      => $login_context,
+		'login_options'      => $login_options,
+	);
+
+	$challenge_context                       = $login_context;
+	$challenge_context['pending_request_id'] = $pending_request['pending_request_id'];
+
+	foreach ( wp_native_auth_get_challenge_policies() as $policy_id => $policy ) {
+		$challenge = call_user_func( $policy['challenge'], $user, $challenge_context );
+		if ( is_wp_error( $challenge ) ) {
+			return $challenge;
+		}
+
+		if ( null === $challenge ) {
+			continue;
+		}
+
+		if ( 'array' !== gettype( $challenge ) || empty( $challenge['type'] ) || ! is_string( $challenge['type'] ) ) {
+			return new WP_Error( 'invalid_challenge_contract', __( 'Authentication policy returned an invalid challenge.', 'wp-native-auth' ), array( 'status' => 500 ) );
+		}
+
+		$pending_request['policy_id'] = $policy_id;
+
+		$continuation = wp_native_auth_create_continuation( $pending_request );
+		if ( is_wp_error( $continuation ) ) {
+			return $continuation;
+		}
+
+		return array(
+			'challenge_required'      => true,
+			'challenge_policy'        => $policy_id,
+			'challenge'               => $challenge,
+			'continuation_token'      => $continuation['token'],
+			'continuation_expires_at' => gmdate( 'c', $continuation['expires_at'] ),
+		);
+	}
+
+	return null;
+}
+
 /** Read the generic client identifier supplied by wp-native transports. */
 function wp_native_auth_get_client_id(): string {
 	$value = isset( $_SERVER['HTTP_WP_NATIVE_CLIENT'] ) ? wp_unslash( (string) $_SERVER['HTTP_WP_NATIVE_CLIENT'] ) : '';

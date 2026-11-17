@@ -14,7 +14,7 @@ if ( ! class_exists( 'WP_UnitTestCase' ) ) {
 /** @group auth @group security */
 class Test_WP_Native_Auth_Session_Challenge_Verification extends WP_UnitTestCase {
 	private int $user_id;
-	private string $device_id       = '33333333-3333-4333-8333-333333333333';
+	private string $device_id       = '';
 	private string $password        = 'correct horse battery staple';
 	private string $original_client = '';
 
@@ -27,6 +27,9 @@ class Test_WP_Native_Auth_Session_Challenge_Verification extends WP_UnitTestCase
 				'user_pass'  => $this->password,
 			)
 		);
+		// Refresh resolves sessions by device_id alone and the custom table
+		// outlives per-test transactions, so every test gets its own device.
+		$this->device_id                              = wp_generate_uuid4();
 		$this->original_client                        = isset( $_SERVER['HTTP_WP_NATIVE_CLIENT'] ) ? (string) $_SERVER['HTTP_WP_NATIVE_CLIENT'] : '';
 		$_SERVER['HTTP_WP_NATIVE_CLIENT']             = 'test-client';
 		$GLOBALS['wp_native_auth_challenge_policies'] = array();
@@ -205,7 +208,7 @@ class Test_WP_Native_Auth_Session_Challenge_Verification extends WP_UnitTestCase
 	public function test_malformed_rechallenge_is_a_contract_error_without_burning_state(): void {
 		$calls = 0;
 		$this->register_policy(
-			static function ( $user, $response ) use ( &$calls ) {
+			static function () use ( &$calls ) {
 				++$calls;
 				return 1 === $calls ? array( 'no-type' => true ) : true;
 			}
@@ -226,6 +229,45 @@ class Test_WP_Native_Auth_Session_Challenge_Verification extends WP_UnitTestCase
 		$schema = wp_get_ability( 'wp-native/auth-continue-login' )->get_output_schema();
 		$this->assertCount( 2, $schema['oneOf'] );
 		$this->assertContains( 'continuation_token', $schema['oneOf'][1]['required'] );
+	}
+
+	public function test_external_primary_authenticator_runs_the_policy_loop(): void {
+		$user = get_user_by( 'id', $this->user_id );
+
+		$this->assertNull( wp_native_auth_challenge_login( $user, $this->device_id, array() ), 'No policy, no challenge.' );
+
+		$seen = array();
+		wp_native_auth_register_challenge_policy(
+			'test-policy',
+			static function ( WP_User $challenged, array $context ) use ( &$seen ) {
+				$seen              = $context;
+				$seen['user_seen'] = (int) $challenged->ID;
+				return array( 'type' => 'test' );
+			},
+			static fn( $verified_user, $response ) => isset( $response['answer'] ) && 'valid' === $response['answer']
+		);
+
+		$pending = wp_native_auth_challenge_login( $user, $this->device_id, array( 'device_name' => 'Phone' ), array( 'reason' => 'identity-provider' ) );
+		$this->assertIsArray( $pending );
+		$this->assertTrue( $pending['challenge_required'] );
+		$this->assertSame( 'test-policy', $pending['challenge_policy'] );
+		$this->assertSame( 'identity-provider', $seen['reason'] );
+		$this->assertSame( 'primary', $seen['phase'] );
+		$this->assertSame( $this->device_id, $seen['device_id'] );
+		$this->assertSame( $this->user_id, $seen['user_seen'] );
+
+		$completed = $this->continue( $pending, array( 'answer' => 'valid' ) );
+		$this->assertArrayHasKey( 'access_token', $completed );
+
+		$session = wp_native_auth_get_session( $this->user_id, $this->device_id );
+		$this->assertSame( 'test-policy', $session['challenge_policy'] );
+		$this->assertSame( 'Phone', $session['device_name'] );
+	}
+
+	public function test_external_primary_authenticator_rejects_invalid_device(): void {
+		$error = wp_native_auth_challenge_login( get_user_by( 'id', $this->user_id ), 'not-a-uuid', array() );
+		$this->assertWPError( $error );
+		$this->assertSame( 'invalid_device_id', $error->get_error_code() );
 	}
 
 	private function register_policy( $verify = null ): void {
