@@ -188,7 +188,7 @@ export function AuthProvider({ api, storage, onAuthFailure, children }: AuthProv
   ) => {
 	const { client, preAuthClient, getDeviceId } = stack;
     const deviceId = await getDeviceId();
-	const response = await preAuthClient.executeUnchecked<AuthLoginSuccess>(
+	const response = await preAuthClient.executeUnchecked<AuthLoginResult>(
       'wp-native/auth-continue-login',
       {
         continuation_token: continuationToken,
@@ -196,6 +196,10 @@ export function AuthProvider({ api, storage, onAuthFailure, children }: AuthProv
         challenge_response: challengeResponse,
       },
     );
+
+    if (isChallengeRequirement(response)) {
+      return response;
+    }
 
     await (stack.transport as AuthFetchTransport).setTokens({
       accessToken: response.access_token,
@@ -209,6 +213,8 @@ export function AuthProvider({ api, storage, onAuthFailure, children }: AuthProv
       isAuthenticated: true,
       sessionExpired: false,
     });
+
+    return undefined;
   }, [stack]);
 
   const register = useCallback(async (email: string, password: string, passwordConfirm: string) => {

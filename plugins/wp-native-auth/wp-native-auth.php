@@ -64,6 +64,9 @@ require_once WP_NATIVE_AUTH_PLUGIN_DIR . 'inc/service.php';
 // the per-device session rows above.
 require_once WP_NATIVE_AUTH_PLUGIN_DIR . 'inc/push.php';
 
+// Per-session authentication challenge verification state.
+require_once WP_NATIVE_AUTH_PLUGIN_DIR . 'inc/session-verification.php';
+
 // Bundled push transport(s), registered on wp_native_auth_push_transports.
 require_once WP_NATIVE_AUTH_PLUGIN_DIR . 'inc/push-transports/expo.php';
 

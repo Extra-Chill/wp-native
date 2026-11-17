@@ -121,11 +121,15 @@ export interface AuthActions {
    */
   login: (identifier: string, password: string) => Promise<AuthChallengeRequirement | void>;
 
-  /** Verify a pending challenge and complete its device-bound login. */
+  /**
+   * Verify a pending challenge and complete its device-bound login.
+   * Resolves with a fresh challenge when the policy re-challenges (for
+   * example after re-sending a code); the continuation stays redeemable.
+   */
   continueLogin: (
     continuationToken: string,
     challengeResponse: Record<string, unknown>,
-  ) => Promise<void>;
+  ) => Promise<AuthChallengeRequirement | void>;
 
   /**
    * Register a new user account with email and password.

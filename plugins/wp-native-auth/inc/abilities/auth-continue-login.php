@@ -39,21 +39,45 @@ function wp_native_auth_register_continue_login_ability(): void {
 				),
 			),
 			'output_schema'       => array(
-				'type'                 => 'object',
-				'required'             => array( 'access_token', 'access_expires_at', 'refresh_token', 'refresh_expires_at', 'user' ),
-				'additionalProperties' => false,
-				'properties'           => array(
-					'access_token'       => array( 'type' => 'string' ),
-					'access_expires_at'  => array(
-						'type'   => 'string',
-						'format' => 'date-time',
+				'oneOf' => array(
+					array(
+						'type'                 => 'object',
+						'required'             => array( 'access_token', 'access_expires_at', 'refresh_token', 'refresh_expires_at', 'user' ),
+						'additionalProperties' => false,
+						'properties'           => array(
+							'access_token'       => array( 'type' => 'string' ),
+							'access_expires_at'  => array(
+								'type'   => 'string',
+								'format' => 'date-time',
+							),
+							'refresh_token'      => array( 'type' => 'string' ),
+							'refresh_expires_at' => array(
+								'type'   => 'string',
+								'format' => 'date-time',
+							),
+							'user'               => array( 'type' => 'object' ),
+						),
 					),
-					'refresh_token'      => array( 'type' => 'string' ),
-					'refresh_expires_at' => array(
-						'type'   => 'string',
-						'format' => 'date-time',
+					// The issuing policy re-challenged (e.g. re-sent a code);
+					// the same continuation stays redeemable.
+					array(
+						'type'                 => 'object',
+						'required'             => array( 'challenge_required', 'challenge_policy', 'challenge', 'continuation_token', 'continuation_expires_at' ),
+						'additionalProperties' => false,
+						'properties'           => array(
+							'challenge_required'      => array(
+								'type' => 'boolean',
+								'enum' => array( true ),
+							),
+							'challenge_policy'        => array( 'type' => 'string' ),
+							'challenge'               => array( 'type' => 'object' ),
+							'continuation_token'      => array( 'type' => 'string' ),
+							'continuation_expires_at' => array(
+								'type'   => 'string',
+								'format' => 'date-time',
+							),
+						),
 					),
-					'user'               => array( 'type' => 'object' ),
 				),
 			),
 			'permission_callback' => '__return_true',

@@ -39,6 +39,8 @@ CREATE TABLE {$table_name} (
   resource varchar(255) NULL,
   push_token varchar(255) NULL,
   push_provider varchar(32) NULL,
+  challenge_policy varchar(191) NULL,
+  challenge_verified_at datetime NULL,
   created_at datetime NOT NULL,
   last_used_at datetime NULL,
   expires_at datetime NOT NULL,
@@ -55,6 +57,13 @@ CREATE TABLE {$table_name} (
 ```
 
 Hash algorithm: `hash( 'sha256', $token, false )` — 64 hex chars. Plaintext refresh tokens are returned to the client exactly once (issue + rotate) and never persisted.
+
+### Challenge verification columns (v8)
+
+- **`challenge_policy`** (`varchar(191)` NULL) — the authentication challenge policy (see [`wp-native/auth-continue-login`](#wp-nativeauth-continue-login)) whose verifier approved this session's login, or that most recently re-verified it. NULL when the session never passed a challenge.
+- **`challenge_verified_at`** (`datetime` NULL, GMT) — when the session passed that policy: the login completion time, or the latest re-verification. NULL when `challenge_policy` is NULL.
+
+A fresh login or registration on the same device rewrites both columns (NULL unless that login went through a policy), so verification never outlives the login that earned it. Refresh rotation preserves them. Integrations read and stamp them through the [session verification API](#session-verification-api).
 
 ### Push columns (v7)
 
@@ -88,6 +97,7 @@ compared against the `WP_NATIVE_AUTH_SCHEMA_VERSION` constant in `inc/db.php`:
 - **v5** — generic OAuth 2.1 authorization server (#80): adds `oauth_client_id` + `resource` columns and `refresh_token_hash` / `prev_token_hash` indexes to the refresh tokens table, and adds the `wp_native_auth_oauth_clients` and `wp_native_auth_oauth_authorization_codes` tables.
 - **v6** — device authorization grant (#91): adds the `wp_native_auth_oauth_device_codes` table. Purely additive — one new table, no change to any existing one, so installs that never use the device grant are unaffected.
 - **v7** — push token registration (#118): adds NULL-able `push_token` + `push_provider` columns and a `push_token` index to the refresh tokens table via the same additive dbDelta migration. Existing sessions keep working and simply have no push destination until the client registers one.
+- **v8** — per-session challenge verification (#120): adds NULL-able `challenge_policy` + `challenge_verified_at` columns to the refresh tokens table via the same additive dbDelta migration. Existing sessions keep working and read as never verified.
 
 ```sql
 CREATE TABLE {$wpdb->base_prefix}wp_native_auth_login_continuations (
@@ -279,6 +289,18 @@ order; the first public challenge returned becomes the sole issuer:
 }
 ```
 
+Integrations that verify the primary credential another way (an identity
+provider token, a magic link) run the same loop by calling
+`wp_native_auth_challenge_login( WP_User $user, string $device_id, array
+$login_options, array $context = array() )` before minting a session. It
+returns the challenge shape above, a `WP_Error`, or `null` when no policy
+challenged and the caller may complete the login itself. `$login_options`
+(`device_name`, `remember`, `set_cookie`) are bound to the continuation and
+applied by `wp_native_auth_complete_login()` when it is redeemed; `$context`
+reaches every policy callback, with `device_id`, `client_id`, `blog_id`,
+`reason` (`login`), and `phase` (`primary`) filled in when absent. No primary
+authenticator can then skip a policy that challenges the same account.
+
 The policy ID must match `^[a-z0-9][a-z0-9._-]{0,190}$` and the descriptor must
 contain a non-empty string `type`. Integrations must not put secrets in this
 public object. To resume, clients call
@@ -287,9 +309,25 @@ public object. To resume, clients call
 dispatches directly to the verifier registered for the stored,
 HMAC-bound `challenge_policy`; unrelated callbacks cannot observe or override
 the result. The verifier receives the bound user, untrusted response, and
-pending request context. It must return boolean `true` to complete login,
-`WP_Error` to reject with a policy-specific error, or null/false to return
-`challenge_rejected`.
+pending request context. It must return one of:
+
+- boolean `true` to complete login. The new device session records the
+  policy ID and verification time (`challenge_policy`,
+  `challenge_verified_at`);
+- a public challenge array (non-empty string `type`) to **re-challenge**
+  without consuming the continuation, for example after re-sending a code.
+  The response repeats the `challenge_required` shape above with the new
+  descriptor, the **same** `continuation_token`, and the original
+  `continuation_expires_at`. The attempt still counts against the five-attempt
+  budget; a re-challenge on the final attempt returns
+  `continuation_rate_limited` instead;
+- `WP_Error` to reject with a policy-specific error (for example a wrong code).
+  The claim is released, so the continuation stays redeemable while attempts
+  remain;
+- null/false to return `challenge_rejected`.
+
+A re-challenge array without a string `type` returns
+`invalid_challenge_contract` (500) and releases the claim.
 
 Continuations use 256-bit opaque bearers. Only SHA-256 hashes are persisted.
 Server-side state binds the blog, user, issuing policy, device,
@@ -309,6 +347,37 @@ then deleted; recoverable persistence failure releases the claim for retry.
 | `continuation_rate_limited` | 429 | Five verification attempts were consumed |
 | `continuation_in_progress` | 409 | Another request already claimed this continuation |
 | `challenge_policy_unavailable` | 503 | The issuing policy is not registered on the redemption request |
+| `invalid_challenge_contract` | 500 | The verifier returned a re-challenge without a string `type` |
+
+### Session verification API
+
+Generic PHP helpers for integrations that need to know whether, and how
+recently, a bearer device session passed a challenge policy (step-up checks):
+
+| Function | Returns |
+|---|---|
+| `wp_native_auth_get_current_session(): ?array` | The active device session behind the current bearer-authenticated request, or null (cookie requests, unknown tokens, a bearer for a different user than the current user, revoked/expired sessions). |
+| `wp_native_auth_get_session( int $user_id, string $device_id ): ?array` | The same shape for an explicit user/device pair. |
+| `wp_native_auth_mark_current_session_verified( string $policy_id ): bool` | Stamps `challenge_policy` + `challenge_verified_at = now` on the current bearer session. False when there is no active bearer session or the ID is not a valid policy ID. |
+| `wp_native_auth_mark_session_verified( int $user_id, string $device_id, string $policy_id ): bool` | The same for an explicit user/device pair. |
+
+Session shape:
+
+```json
+{
+  "user_id": 42,
+  "device_id": "uuid-v4",
+  "device_name": "Pixel 9",
+  "oauth_client_id": null,
+  "created_at": 1767225600,
+  "challenge_policy": "stable-policy-id",
+  "challenge_verified_at": 1767225600
+}
+```
+
+Timestamps are Unix seconds; `challenge_policy` / `challenge_verified_at` are
+null for sessions that never passed a challenge. A successful stamp fires
+`do_action( 'wp_native_auth_session_verified', int $user_id, string $device_id, string $policy_id )`.
 
 ### Continuation table and lifecycle
 

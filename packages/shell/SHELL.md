@@ -91,7 +91,7 @@ interface AuthState {
 
 interface AuthActions {
   login(identifier: string, password: string): Promise<AuthChallengeRequirement | void>;
-  continueLogin(token: string, response: Record<string, unknown>): Promise<void>;
+  continueLogin(token: string, response: Record<string, unknown>): Promise<AuthChallengeRequirement | void>; // re-challenge keeps the continuation
   register(email: string, password: string, confirmation: string): Promise<void>;
   logout(): Promise<void>;
   refreshSession(): Promise<void>;

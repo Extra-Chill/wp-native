@@ -127,8 +127,8 @@ class Test_WP_Native_Auth_Push_Tokens extends WP_UnitTestCase {
 	// ---------------------------------------------------------------------
 
 	public function test_schema_v7_adds_nullable_push_columns(): void {
-		$this->assertSame( 7, WP_NATIVE_AUTH_SCHEMA_VERSION );
-		$this->assertSame( 7, (int) get_site_option( WP_NATIVE_AUTH_SCHEMA_VERSION_OPTION ) );
+		$this->assertGreaterThanOrEqual( 7, WP_NATIVE_AUTH_SCHEMA_VERSION );
+		$this->assertSame( WP_NATIVE_AUTH_SCHEMA_VERSION, (int) get_site_option( WP_NATIVE_AUTH_SCHEMA_VERSION_OPTION ) );
 
 		$columns = $this->push_columns();
 

@@ -33,13 +33,20 @@ require_once __DIR__ . '/tokens.php';
  * means a native app session. These bindings are preserved on rotation
  * (see wp_native_auth_refresh_tokens()).
  *
+ * Optional challenge verification (`challenge_policy`) records that this
+ * session was minted after an authentication challenge policy approved the
+ * login; `challenge_verified_at` is stamped with the issue time. A fresh
+ * issue without it clears any verification left by a superseded session on
+ * the same device, so verification never outlives the login that earned it.
+ *
  * @param int                $user_id    User ID.
  * @param string             $device_id  Device ID (UUID v4).
  * @param string             $device_name Optional human-readable device name.
  * @param array<string,mixed> $oauth_meta Optional. { @type string $oauth_client_id @type string $resource }
+ * @param array<string,mixed> $session_meta Optional. { @type string $challenge_policy Policy that verified this login. }
  * @return array{token:string, expires_at:int}|WP_Error Plaintext token and Unix expiry.
  */
-function wp_native_auth_issue_refresh_token( int $user_id, string $device_id, string $device_name = '', array $oauth_meta = array() ) {
+function wp_native_auth_issue_refresh_token( int $user_id, string $device_id, string $device_name = '', array $oauth_meta = array(), array $session_meta = array() ) {
 	global $wpdb;
 
 	$table_name = wp_native_auth_refresh_tokens_table_name();
@@ -96,12 +103,17 @@ function wp_native_auth_issue_refresh_token( int $user_id, string $device_id, st
 		'revoked_at'         => null,
 	);
 
+	$challenge_policy = isset( $session_meta['challenge_policy'] ) ? (string) $session_meta['challenge_policy'] : '';
+
+	$data['challenge_policy']      = '' !== $challenge_policy ? $challenge_policy : null;
+	$data['challenge_verified_at'] = '' !== $challenge_policy ? $now : null;
+
 	if ( $existing_id ) {
 		$persisted = $wpdb->update(
 			$table_name,
 			$data,
 			array( 'id' => (int) $existing_id ),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' ),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' ),
 			array( '%d' )
 		);
 	} else {
@@ -109,7 +121,7 @@ function wp_native_auth_issue_refresh_token( int $user_id, string $device_id, st
 		$persisted          = $wpdb->insert(
 			$table_name,
 			$data,
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 	}
 
@@ -248,60 +260,26 @@ function wp_native_auth_login_with_tokens( string $identifier, string $password,
 		return $pre_login;
 	}
 
-	$login_context = $context;
-
-	$pending_request = array(
-		'pending_request_id' => wp_generate_uuid4(),
-		'user_id'            => (int) $user->ID,
-		'blog_id'            => get_current_blog_id(),
-		'device_id'          => $device_id,
-		'client_id'          => $context['client_id'],
-		'login_context'      => $login_context,
-		'login_options'      => array(
-			'device_name' => $device_name,
-			'remember'    => $remember,
-			'set_cookie'  => $set_cookie,
-		),
+	$login_options = array(
+		'device_name' => $device_name,
+		'remember'    => $remember,
+		'set_cookie'  => $set_cookie,
 	);
 
-	$challenge_context                       = $login_context;
-	$challenge_context['pending_request_id'] = $pending_request['pending_request_id'];
-
-	foreach ( wp_native_auth_get_challenge_policies() as $policy_id => $policy ) {
-		$challenge = call_user_func( $policy['challenge'], $user, $challenge_context );
-		if ( is_wp_error( $challenge ) ) {
-			return $challenge;
-		}
-
-		if ( null === $challenge ) {
-			continue;
-		}
-
-		if ( 'array' !== gettype( $challenge ) || empty( $challenge['type'] ) || ! is_string( $challenge['type'] ) ) {
-			return new WP_Error( 'invalid_challenge_contract', __( 'Authentication policy returned an invalid challenge.', 'wp-native-auth' ), array( 'status' => 500 ) );
-		}
-
-		$pending_request['policy_id'] = $policy_id;
-
-		$continuation = wp_native_auth_create_continuation( $pending_request );
-		if ( is_wp_error( $continuation ) ) {
-			return $continuation;
-		}
-
-		return array(
-			'challenge_required'      => true,
-			'challenge_policy'        => $policy_id,
-			'challenge'               => $challenge,
-			'continuation_token'      => $continuation['token'],
-			'continuation_expires_at' => gmdate( 'c', $continuation['expires_at'] ),
-		);
+	$challenge = wp_native_auth_challenge_login( $user, $device_id, $login_options, $context );
+	if ( null !== $challenge ) {
+		return $challenge;
 	}
 
-	return wp_native_auth_complete_login( $user, $device_id, $pending_request['login_options'] );
+	return wp_native_auth_complete_login( $user, $device_id, $login_options );
 }
 
 /**
  * Mint the session for an already authenticated and policy-approved user.
+ *
+ * When `$options['challenge_policy']` is set (the continuation path passes the
+ * policy whose verifier approved the login), the device session records that
+ * policy and the verification time. See wp_native_auth_get_current_session().
  *
  * @param WP_User             $user      Authenticated user.
  * @param string              $device_id Device UUID.
@@ -324,7 +302,12 @@ function wp_native_auth_complete_login( WP_User $user, string $device_id, array 
 	if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
 		return new WP_Error( 'session_storage_failed', __( 'The session could not be stored.', 'wp-native-auth' ), array( 'status' => 500 ) );
 	}
-	$refresh = wp_native_auth_issue_refresh_token( (int) $user->ID, $device_id, $device_name );
+	$session_meta = array();
+	if ( ! empty( $options['challenge_policy'] ) ) {
+		$session_meta['challenge_policy'] = (string) $options['challenge_policy'];
+	}
+
+	$refresh = wp_native_auth_issue_refresh_token( (int) $user->ID, $device_id, $device_name, array(), $session_meta );
 	if ( is_wp_error( $refresh ) ) {
 		$wpdb->query( 'ROLLBACK' );
 		return $refresh;
