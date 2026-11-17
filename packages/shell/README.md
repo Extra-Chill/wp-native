@@ -69,7 +69,10 @@ export default function RootLayout() {
 
 ### Hooks
 
-- **`useAuth()`** — auth state (`user`, `isAuthenticated`, `isLoading`, `sessionExpired`) + actions (`login()`, `logout()`, `refreshSession()`, `client`). Use `client.derive(restRoot)` for roots approved by `api.allowedBaseUrls`.
+- **`useAuth()`** — auth state (`user`, `isAuthenticated`, `isLoading`, `sessionExpired`) + actions (`login()`, `continueLogin()`, `completeLogin()`, `getDeviceId()`, `register()`, `logout()`, `refreshSession()`, `request()`, `client`). Use `client.derive(restRoot)` for roots approved by `api.allowedBaseUrls`.
+  - `completeLogin(result)` installs a login success obtained outside the shell (for example a social sign-in route that returns wp-native-auth tokens): tokens go into the shell's transport and storage, abilities are discovered, and the user is set, the same as a password login. Send `getDeviceId()` to that route: refresh is device-bound, so the tokens must be issued for the shell's device id.
+  - `request({ method, path, query, body })` makes an authenticated call to a plain REST route with the same bearer, refresh, and 401 retry as ability calls (shorthand for `client.request()`).
+  - Failed calls, including `continueLogin()`, throw the client's `ApiError` with WordPress's `code`, `status` and `data` (for example `retry_after` or a rotated `continuation_token`).
 - **`useTheme()`** — fully-resolved `ThemeTokens` (colors, typography, spacing, radii).
 - **`useNavigationConfig()`** — the consumer's `WPNativeNavigationConfig` from context.
 - **`useBrowserHandoff()`** — `{ handle(url): Promise<boolean> }` for opening URLs with a session-handoff token.

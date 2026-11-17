@@ -5,7 +5,7 @@
  * All shapes match the SHELL.md M5.1 contract.
  */
 
-import type { WPNativeClient } from 'wp-native-client';
+import type { WPNativeClient, WPNativeRequest } from 'wp-native-client';
 import type { ReactNode } from 'react';
 
 // ─── User ────────────────────────────────────────────────────────────────────
@@ -132,6 +132,23 @@ export interface AuthActions {
   ) => Promise<AuthChallengeRequirement | void>;
 
   /**
+   * Install a session from a login success obtained outside the shell, e.g.
+   * a social sign-in REST route that returns wp-native-auth tokens. Stores the
+   * tokens in the shell's transport, runs discover(), and sets the user —
+   * exactly what login() and continueLogin() do on success. Rejects a
+   * challenge (complete it with continueLogin()) or a malformed result.
+   *
+   * The tokens must be issued for getDeviceId() (refresh is device-bound).
+   */
+  completeLogin: (result: AuthLoginSuccess) => Promise<void>;
+
+  /**
+   * The persistent device id the shell sends with login, refresh and logout.
+   * Send it to any external login route whose tokens go to completeLogin().
+   */
+  getDeviceId: () => Promise<string>;
+
+  /**
    * Register a new user account with email and password.
    * Calls `wp-native/auth-register`, stores tokens, runs discover(), sets user.
    * Same return contract as login — Promise<void>, throws on failure.
@@ -155,6 +172,14 @@ export interface AuthActions {
    * Call this after showing a "session expired" dialog and navigating to login.
    */
   clearSessionExpired: () => void;
+
+  /**
+   * Authenticated request to a plain REST route on the API root (e.g. a
+   * plugin namespace that is not an ability). Same bearer auth, proactive
+   * refresh, refresh-and-retry on 401, and ApiError (`code`, `status`,
+   * `data`) as ability calls. Shorthand for `client.request()`.
+   */
+  request: <T = unknown>(req: WPNativeRequest) => Promise<T>;
 
   /** The client for direct calls; use client.derive() for approved REST roots. */
   client: WPNativeClient;
