@@ -3,6 +3,9 @@ const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 
 const projectRoot = path.resolve(__dirname, '..');
+// The tarball under test is the workspace package, so expect its own version
+// (release-owned) instead of a pinned literal that drifts on every release.
+const gutenbergVersion = require('../../../packages/gutenberg/package.json').version;
 const expoCli = require.resolve('expo/bin/cli');
 const output = execFileSync(
   process.execPath,
@@ -35,7 +38,7 @@ for (const platform of ['apple', 'android']) {
 
   assert.equal(versions.expo, '54.0.36');
   assert.equal(versions['expo-modules-core'], '3.0.30');
-  assert.equal(versions['wp-native-gutenberg'], '0.1.0');
+  assert.equal(versions['wp-native-gutenberg'], gutenbergVersion);
 
   for (const module of modules) {
     const nativeProjects = [...(module.pods ?? []), ...(module.projects ?? [])];
