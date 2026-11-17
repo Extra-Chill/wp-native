@@ -289,6 +289,18 @@ order; the first public challenge returned becomes the sole issuer:
 }
 ```
 
+Integrations that verify the primary credential another way (an identity
+provider token, a magic link) run the same loop by calling
+`wp_native_auth_challenge_login( WP_User $user, string $device_id, array
+$login_options, array $context = array() )` before minting a session. It
+returns the challenge shape above, a `WP_Error`, or `null` when no policy
+challenged and the caller may complete the login itself. `$login_options`
+(`device_name`, `remember`, `set_cookie`) are bound to the continuation and
+applied by `wp_native_auth_complete_login()` when it is redeemed; `$context`
+reaches every policy callback, with `device_id`, `client_id`, `blog_id`,
+`reason` (`login`), and `phase` (`primary`) filled in when absent. No primary
+authenticator can then skip a policy that challenges the same account.
+
 The policy ID must match `^[a-z0-9][a-z0-9._-]{0,190}$` and the descriptor must
 contain a non-empty string `type`. Integrations must not put secrets in this
 public object. To resume, clients call

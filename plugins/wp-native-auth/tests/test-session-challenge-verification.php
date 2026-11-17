@@ -21,12 +21,13 @@ class Test_WP_Native_Auth_Session_Challenge_Verification extends WP_UnitTestCase
 	public function set_up(): void {
 		parent::set_up();
 		wp_native_auth_install_refresh_tokens_table();
-		$this->user_id                                = self::factory()->user->create(
+		$this->user_id = self::factory()->user->create(
 			array(
 				'user_login' => 'session-user-' . wp_generate_uuid4(),
 				'user_pass'  => $this->password,
 			)
 		);
+
 		// Refresh resolves sessions by device_id alone and the custom table
 		// outlives per-test transactions, so every test gets its own device.
 		$this->device_id                              = wp_generate_uuid4();
