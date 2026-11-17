@@ -29,7 +29,7 @@
  */
 
 import type { DerivableTransport, TransportRequest } from './types';
-import { ApiError } from './fetch';
+import { ApiError, readApiError } from './fetch';
 
 /** Token data stored by consumers. */
 export interface StoredTokens {
@@ -263,21 +263,13 @@ export class AuthFetchTransport implements DerivableTransport {
     });
 
     if (response.status === 401) {
-      throw new ApiError('Unauthorized', 'unauthorized', 401);
+      // Keep the WP_Error body (code, message, data) so callers can tell an
+      // expired token from e.g. a rejected verification code.
+      throw await readApiError(response, { message: 'Unauthorized', code: 'unauthorized' });
     }
 
     if (!response.ok) {
-      let errorData: { code?: string; message?: string } = {};
-      try {
-        errorData = await response.json();
-      } catch {
-        // Response wasn't JSON
-      }
-      throw new ApiError(
-        errorData.message || `Request failed with status ${response.status}`,
-        errorData.code || 'request_failed',
-        response.status,
-      );
+      throw await readApiError(response);
     }
 
     if (response.status === 204) {
