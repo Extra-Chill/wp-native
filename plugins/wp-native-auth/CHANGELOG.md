@@ -2,6 +2,11 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.6.1] - 2026-11-17
+
+### Fixed
+- browser handoff honors challenge policies and the minting session
+
 ## [0.6.0] - 2026-11-17
 
 ### Added
