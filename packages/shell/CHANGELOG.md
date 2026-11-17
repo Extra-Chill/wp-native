@@ -2,6 +2,11 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.3.1] - 2026-11-17
+
+### Fixed
+- keep WP_Error data on errors; shell request/completeLogin
+
 ## [0.3.0] - 2026-11-17
 
 ### Added
