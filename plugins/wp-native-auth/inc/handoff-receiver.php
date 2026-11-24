@@ -87,7 +87,19 @@ if ( ! function_exists( 'wp_native_auth_process_browser_handoff' ) ) {
 
 		// Establish the WordPress session.
 		wp_set_current_user( (int) $user->ID, $user->user_login );
-		wp_set_auth_cookie( (int) $user->ID, false );
+
+		/**
+		 * Filters whether a browser handoff sets a persistent ("remember me") auth cookie.
+		 *
+		 * Defaults to true so users arriving from the native app stay signed in
+		 * after the browser quits. Return false for a browser-session cookie.
+		 *
+		 * @param bool    $remember Whether to set a persistent cookie. Default true.
+		 * @param WP_User $user     The user being signed in.
+		 * @param array   $handoff  Consumed handoff record: `user_id`, `device_id`, `created_at`.
+		 */
+		$remember = (bool) apply_filters( 'wp_native_auth_browser_handoff_remember', true, $user, $handoff );
+		wp_set_auth_cookie( (int) $user->ID, $remember );
 
 		/** This action is documented in wp-includes/user.php */
 		do_action( 'wp_login', $user->user_login, $user );

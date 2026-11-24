@@ -21,6 +21,9 @@ class Test_WP_Native_Auth_Browser_Handoff_Challenge extends WP_UnitTestCase {
 	private string $original_client = '';
 	private int $cookies            = 0;
 
+	/** @var list<int> Cookie `$expire` values; 0 means a browser-session cookie. */
+	private array $cookie_expires = array();
+
 	/** @var list<array{0:string,1:WP_User}> */
 	private array $logins = array();
 
@@ -42,11 +45,12 @@ class Test_WP_Native_Auth_Browser_Handoff_Challenge extends WP_UnitTestCase {
 		$_SERVER['HTTP_WP_NATIVE_CLIENT']             = 'test-client';
 		$GLOBALS['wp_native_auth_challenge_policies'] = array();
 		$this->cookies                                = 0;
+		$this->cookie_expires                         = array();
 		$this->logins                                 = array();
 		$this->refusals                               = array();
 
 		add_filter( 'send_auth_cookies', '__return_false' );
-		add_action( 'set_auth_cookie', array( $this, 'count_cookie' ) );
+		add_action( 'set_auth_cookie', array( $this, 'count_cookie' ), 10, 2 );
 		add_action( 'wp_login', array( $this, 'record_login' ), 10, 2 );
 		add_action( 'wp_native_auth_browser_handoff_refused', array( $this, 'record_refusal' ), 10, 2 );
 	}
@@ -60,12 +64,14 @@ class Test_WP_Native_Auth_Browser_Handoff_Challenge extends WP_UnitTestCase {
 		remove_action( 'wp_login', array( $this, 'record_login' ), 10 );
 		remove_action( 'wp_native_auth_browser_handoff_refused', array( $this, 'record_refusal' ), 10 );
 		remove_all_filters( 'wp_native_auth_pre_browser_handoff' );
+		remove_all_filters( 'wp_native_auth_browser_handoff_remember' );
 		wp_set_current_user( 0 );
 		parent::tear_down();
 	}
 
-	public function count_cookie(): void {
+	public function count_cookie( $auth_cookie = '', $expire = 0 ): void {
 		++$this->cookies;
+		$this->cookie_expires[] = (int) $expire;
 	}
 
 	public function record_login( $user_login, $user ): void {
@@ -88,6 +94,45 @@ class Test_WP_Native_Auth_Browser_Handoff_Challenge extends WP_UnitTestCase {
 		$this->assertCount( 1, $this->logins );
 		$this->assertSame( $this->user_id, (int) $this->logins[0][1]->ID );
 		$this->assertSame( array(), $this->refusals );
+	}
+
+	public function test_handoff_sets_a_persistent_cookie_by_default(): void {
+		$this->login_and_activate_bearer();
+
+		$location = $this->consume( wp_native_auth_create_handoff_token( $this->user_id ) );
+
+		$this->assertSame( self::DESTINATION, $location );
+		$this->assertNotEmpty( $this->cookie_expires );
+		foreach ( $this->cookie_expires as $expire ) {
+			$this->assertGreaterThan( time(), $expire, 'remembered cookies carry an expiry' );
+		}
+	}
+
+	public function test_remember_filter_can_request_a_session_cookie(): void {
+		$seen = array();
+		add_filter(
+			'wp_native_auth_browser_handoff_remember',
+			static function ( $remember, $user, $handoff ) use ( &$seen ) {
+				$seen[] = array( $remember, (int) $user->ID, $handoff );
+				return false;
+			},
+			10,
+			3
+		);
+		$this->login_and_activate_bearer();
+
+		$location = $this->consume( wp_native_auth_create_handoff_token( $this->user_id ) );
+
+		$this->assertSame( self::DESTINATION, $location );
+		$this->assertCount( 1, $seen );
+		$this->assertTrue( $seen[0][0] );
+		$this->assertSame( $this->user_id, $seen[0][1] );
+		$this->assertSame( $this->user_id, $seen[0][2]['user_id'] );
+		$this->assertSame( $this->device_id, $seen[0][2]['device_id'] );
+		$this->assertNotEmpty( $this->cookie_expires );
+		foreach ( $this->cookie_expires as $expire ) {
+			$this->assertSame( 0, $expire, 'session cookies have no expiry' );
+		}
 	}
 
 	public function test_token_records_the_minting_bearer_session(): void {
