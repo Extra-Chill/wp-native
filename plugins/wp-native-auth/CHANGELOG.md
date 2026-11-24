@@ -2,6 +2,11 @@
 
 <!-- Managed by homeboy. Do not hand-edit. -->
 
+## [0.7.0] - 2026-11-24
+
+### Added
+- persist browser handoff auth cookie by default
+
 ## [0.6.1] - 2026-11-17
 
 ### Fixed
